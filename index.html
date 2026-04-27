@@ -471,7 +471,78 @@
             });
         }
 
-        // ===== OCR.SPACE API (motor principal) =====
+        // ===== CLAUDE VISION (motor principal — entende a imagem semanticamente) =====
+        function getClaudeKey() {
+            let key = sessionStorage.getItem('claude_key');
+            if (!key) {
+                key = prompt('🔑 Digite sua chave Anthropic (Claude API Key):\n(Será salva só nesta sessão)');
+                if (key) sessionStorage.setItem('claude_key', key.trim());
+            }
+            return key ? key.trim() : null;
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function ocrWithClaude(file) {
+            const CLAUDE_KEY = getClaudeKey();
+            if (!CLAUDE_KEY) throw new Error('Chave Claude não fornecida');
+            const b64 = await fileToBase64(file);
+            const mediaType = file.type || 'image/jpeg';
+            const prompt = `Analise este comprovante de bolão da Lotérica CAIXA e extraia TODOS os jogos em formato JSON.
+
+Retorne APENAS um objeto JSON válido, sem texto adicional, neste formato:
+{
+  "jogos": [
+    {"modalidade": "MEGA", "qt": 3, "vBolao": 30.00, "vTarifa": 10.50},
+    {"modalidade": "QUINA", "qt": 5, "vBolao": 63.00, "vTarifa": 22.04},
+    {"modalidade": "LOTOFÁCIL", "qt": 2, "vBolao": 17.50, "vTarifa": 6.12}
+  ],
+  "totalBolao": 594.00,
+  "totalTarifa": 207.85
+}
+
+Regras:
+- MOD-CONC (ex: MEGA-2995) → use só a modalidade (MEGA, QUINA, LOTOFÁCIL, LOTOMANIA, TIMEMANIA)
+- C.T/C.V (ex: 3/0) → o número antes do / é a quantidade de cotas (qt)
+- V.BOLAO = valor do bolão
+- V.TARIFA = valor da tarifa de serviço
+- Se houver seção "SEM TARIFA DE SERVIÇO", inclua esses jogos com vTarifa: 0
+- Use ponto como separador decimal no JSON (ex: 17,50 → 17.50)
+- Inclua TODOS os jogos, mesmo repetidos`;
+
+            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': CLAUDE_KEY,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5',
+                    max_tokens: 2048,
+                    messages: [{ role: 'user', content: [
+                        { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+                        { type: 'text', text: prompt }
+                    ]}]
+                })
+            });
+            if (!resp.ok) throw new Error('Claude API erro: ' + resp.status);
+            const json = await resp.json();
+            const texto = json.content?.[0]?.text || '';
+            // Extrair JSON da resposta
+            const match = texto.match(/\{[\s\S]*\}/);
+            if (!match) throw new Error('Claude não retornou JSON válido');
+            return JSON.parse(match[0]);
+        }
+
+        // ===== OCR.SPACE FALLBACK (retorna texto bruto) =====
         async function ocrWithOcrSpace(file) {
             const formData = new FormData();
             formData.append('file', file);
@@ -479,9 +550,7 @@
             formData.append('isOverlayRequired', 'false');
             formData.append('detectOrientation', 'true');
             formData.append('scale', 'true');
-            formData.append('isTable', 'false');
-            formData.append('OCREngine', '2'); // Engine 2 = mais preciso
-
+            formData.append('OCREngine', '2');
             const resp = await fetch('https://api.ocr.space/parse/image', {
                 method: 'POST',
                 headers: { 'apikey': 'K82269935' },
@@ -495,8 +564,7 @@
         // ===== TESSERACT FALLBACK =====
         async function ocrWithTesseract(processedDataUrl) {
             const result = await Tesseract.recognize(processedDataUrl, 'por', {
-                tessedit_pageseg_mode: '6',
-                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀ-ú0123456789.,/$ -:'
+                tessedit_pageseg_mode: '6'
             });
             return result.data.text;
         }
@@ -513,18 +581,45 @@
 
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
-            setOcrStatus('🔍 Lendo comprovante com OCR.space...');
+            setOcrStatus('🤖 Analisando com IA (Claude Vision)...');
 
             try {
-                let texto = '';
+                let jogos = [], totalComprovante = 0;
 
-                // Tenta OCR.space primeiro (muito mais preciso)
+                // 1º: Claude Vision (entende a imagem diretamente)
+                try {
+                    const resultado = await ocrWithClaude(file);
+                    jogos = (resultado.jogos || []).map(j => ({
+                        modalidade: j.modalidade,
+                        qt: Number(j.qt),
+                        vBolao: Number(j.vBolao),
+                        vTarifa: Number(j.vTarifa || 0),
+                        cota: Math.round(((Number(j.vBolao) + Number(j.vTarifa || 0)) / Number(j.qt)) * 100) / 100
+                    }));
+                    totalComprovante = Number(resultado.totalBolao || 0) + Number(resultado.totalTarifa || 0);
+                    setOcrStatus('✅ Claude Vision concluído!');
+
+                    // Mostrar texto resumido no preview
+                    document.getElementById('textPreview').textContent =
+                        jogos.map(j => `${j.modalidade} ${j.qt}x | Bolão: R$${j.vBolao.toFixed(2)} | Tarifa: R$${j.vTarifa.toFixed(2)} | Cota: R$${j.cota.toFixed(2)}`).join('\n');
+                    document.getElementById('textPreview').classList.add('show');
+
+                    document.getElementById('ocrLoading').classList.remove('show');
+                    validateData(jogos, totalComprovante);
+                    return; // Sucesso — sair aqui
+
+                } catch (errClaude) {
+                    console.warn('Claude falhou, tentando OCR.space:', errClaude);
+                    setOcrStatus('⚠️ Tentando OCR.space...');
+                }
+
+                // 2º: OCR.space + parser
+                let texto = '';
                 try {
                     texto = await ocrWithOcrSpace(file);
                     setOcrStatus('✅ OCR.space concluído!');
-                } catch (errOcrSpace) {
-                    console.warn('OCR.space falhou, usando Tesseract:', errOcrSpace);
-                    setOcrStatus('⚠️ Tentando Tesseract...');
+                } catch (errOcr) {
+                    setOcrStatus('⚠️ Usando Tesseract...');
                     const processedImageData = await preprocessImage(file);
                     texto = await ocrWithTesseract(processedImageData);
                 }
