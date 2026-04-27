@@ -419,7 +419,7 @@
                 .catch((err) => console.log('SW erro:', err));
         }
 
-        // ===== IMAGE PRE-PROCESSING =====
+        // ===== IMAGE PRE-PROCESSING AVANÇADO =====
         async function preprocessImage(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -428,32 +428,77 @@
                     img.onload = () => {
                         const canvas = document.getElementById('processCanvas');
                         const ctx = canvas.getContext('2d');
-                        
-                        // Redimensionar para um tamanho bom para OCR (máx 1500px)
+
+                        // Escalar para mínimo 2000px no maior lado (OCR precisa de resolução)
                         let width = img.width;
                         let height = img.height;
-                        const maxDim = 1500;
-                        if (width > height && width > maxDim) {
-                            height *= maxDim / width;
-                            width = maxDim;
-                        } else if (height > maxDim) {
-                            width *= maxDim / height;
-                            height = maxDim;
+                        const minDim = 2000;
+                        if (width > height && width < minDim) {
+                            height = Math.round(height * minDim / width);
+                            width = minDim;
+                        } else if (height <= width && height < minDim) {
+                            width = Math.round(width * minDim / height);
+                            height = minDim;
                         }
-                        
+                        // Limitar a 3000px para não estourar memória
+                        const maxDim = 3000;
+                        if (width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+                        if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+
                         canvas.width = width;
                         canvas.height = height;
-                        
-                        // Desenhar e aplicar filtros básicos
-                        ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
+
+                        // 1ª passagem: grayscale + alto contraste
+                        ctx.filter = 'grayscale(100%) contrast(180%) brightness(115%) sharpen(1)';
                         ctx.drawImage(img, 0, 0, width, height);
-                        
-                        resolve(canvas.toDataURL('image/jpeg', 0.9));
+
+                        // 2ª passagem: binarização adaptativa por pixel
+                        const imageData = ctx.getImageData(0, 0, width, height);
+                        const data = imageData.data;
+                        const threshold = 150;
+                        for (let i = 0; i < data.length; i += 4) {
+                            const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+                            const val = avg < threshold ? 0 : 255;
+                            data[i] = data[i+1] = data[i+2] = val;
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+
+                        resolve(canvas.toDataURL('image/png', 1.0));
                     };
                     img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             });
+        }
+
+        // ===== OCR.SPACE API (motor principal) =====
+        async function ocrWithOcrSpace(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('language', 'por');
+            formData.append('isOverlayRequired', 'false');
+            formData.append('detectOrientation', 'true');
+            formData.append('scale', 'true');
+            formData.append('isTable', 'false');
+            formData.append('OCREngine', '2'); // Engine 2 = mais preciso
+
+            const resp = await fetch('https://api.ocr.space/parse/image', {
+                method: 'POST',
+                headers: { 'apikey': 'K82269935' },
+                body: formData
+            });
+            const json = await resp.json();
+            if (json.IsErroredOnProcessing) throw new Error(json.ErrorMessage);
+            return json.ParsedResults?.[0]?.ParsedText || '';
+        }
+
+        // ===== TESSERACT FALLBACK =====
+        async function ocrWithTesseract(processedDataUrl) {
+            const result = await Tesseract.recognize(processedDataUrl, 'por', {
+                tessedit_pageseg_mode: '6',
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀ-ú0123456789.,/$ -:'
+            });
+            return result.data.text;
         }
 
         // ===== FILE INPUT =====
@@ -468,15 +513,21 @@
 
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
+            setOcrStatus('🔍 Lendo comprovante com OCR.space...');
 
             try {
-                // Pré-processar a imagem antes do OCR
-                const processedImageData = await preprocessImage(file);
-                
-                const result = await Tesseract.recognize(processedImageData, 'por', { 
-                    logger: (m) => console.log(m) 
-                });
-                const texto = result.data.text;
+                let texto = '';
+
+                // Tenta OCR.space primeiro (muito mais preciso)
+                try {
+                    texto = await ocrWithOcrSpace(file);
+                    setOcrStatus('✅ OCR.space concluído!');
+                } catch (errOcrSpace) {
+                    console.warn('OCR.space falhou, usando Tesseract:', errOcrSpace);
+                    setOcrStatus('⚠️ Tentando Tesseract...');
+                    const processedImageData = await preprocessImage(file);
+                    texto = await ocrWithTesseract(processedImageData);
+                }
 
                 document.getElementById('textPreview').textContent = texto;
                 document.getElementById('textPreview').classList.add('show');
@@ -495,6 +546,11 @@
                 handleFailedAttempt();
             }
         });
+
+        function setOcrStatus(msg) {
+            const el = document.querySelector('#ocrLoading p');
+            if (el) el.textContent = msg;
+        }
 
         function updateAttemptsUI() {
             document.getElementById('attemptsText').textContent = `Tentativa ${currentAttempt} de ${maxAttempts}`;
