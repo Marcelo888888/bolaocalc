@@ -7,7 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>🎰 BolãoCalc CAIXA</title>
+    <meta name="description" content="Calculadora de cotas para bolões da Lotérica CAIXA. Tire foto do comprovante e calcule automaticamente.">
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <script src='https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js'></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -507,7 +510,7 @@
             const validationCard = document.getElementById('validationCard');
             validationCard.classList.add('show');
 
-            const somaBoloes = jogos.reduce((s, j) => s + j.v_bolao, 0);
+            const somaBoloes = jogos.reduce((s, j) => s + j.vBolao, 0);
             const diferenca = Math.abs(somaBoloes - totalComprovante);
             const diffPercent = totalComprovante > 0 ? (diferenca / totalComprovante) * 100 : (jogos.length === 0 ? 100 : 0);
 
@@ -577,16 +580,16 @@
                     <td>${i + 1}</td>
                     <td>${jogo.modalidade}</td>
                     <td>${jogo.qt}</td>
-                    <td>R$ ${jogo.v_bolao.toFixed(2).replace('.', ',')}</td>
-                    <td>R$ ${jogo.v_tarifa.toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${jogo.vBolao.toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${jogo.vTarifa.toFixed(2).replace('.', ',')}</td>
                     <td>R$ ${jogo.cota.toFixed(2).replace('.', ',')}</td>
                 </tr>
             `).join('') + `
                 <tr style="font-weight:bold; background:rgba(0,212,255,0.1);">
                     <td colspan="2">TOTAIS</td>
                     <td>${currentJogos.reduce((s, j) => s + j.qt, 0)}</td>
-                    <td>R$ ${currentJogos.reduce((s, j) => s + j.v_bolao, 0).toFixed(2).replace('.', ',')}</td>
-                    <td>R$ ${currentJogos.reduce((s, j) => s + j.v_tarifa, 0).toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${currentJogos.reduce((s, j) => s + j.vBolao, 0).toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${currentJogos.reduce((s, j) => s + j.vTarifa, 0).toFixed(2).replace('.', ',')}</td>
                     <td>-</td>
                 </tr>
             `;
@@ -605,7 +608,7 @@
                 if (!grupos[cotaKey]) grupos[cotaKey] = 0;
                 grupos[cotaKey] += jogo.qt;
                 totalCotas += jogo.qt;
-                totalValor += (jogo.v_bolao + jogo.v_tarifa);
+                totalValor += (jogo.vBolao + jogo.vTarifa);
             }
 
             const cotasOrdenadas = Object.keys(grupos).sort((a, b) => parseFloat(a) - parseFloat(b));

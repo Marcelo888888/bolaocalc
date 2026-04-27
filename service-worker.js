@@ -1,5 +1,12 @@
-const CACHE_NAME = 'bolaocalc-v1';
-const urlsToCache = ['.', './index.html', './manifest.json'];
+const CACHE_NAME = 'bolaocalc-v2';
+const urlsToCache = [
+  '.',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './apple-touch-icon.png'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -20,5 +27,12 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      );
+    }).then(() => self.clients.claim())
+  );
 });
