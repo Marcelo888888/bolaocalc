@@ -249,9 +249,8 @@
 
         .text-preview {
             background: rgba(0,0,0,0.3); border: 1px solid rgba(0,212,255,0.2);
-            border-radius: 10px; padding: 15px; margin: 15px 0;
-            font-family: 'Courier New', monospace; font-size: 0.8em;
-            color: #8892b0; max-height: 150px; overflow-y: auto;
+            border-radius: 10px; padding: 10px; margin-top: 15px; font-family: monospace;
+            font-size: 0.7em; color: #8892b0; max-height: 150px; overflow-y: auto;
             white-space: pre-wrap; display: none;
         }
         .text-preview.show { display: block; }
@@ -260,6 +259,8 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
+        canvas#processCanvas { display: none; }
     </style>
 </head>
 <body>
@@ -374,6 +375,8 @@
             <button class="btn-reset" onclick="resetAll()">🔄 Novo Bolão</button>
         </div>
     </div>
+    
+    <canvas id="processCanvas"></canvas>
 
     <script>
         // ===== STATE =====
@@ -409,6 +412,43 @@
                 .catch((err) => console.log('SW erro:', err));
         }
 
+        // ===== IMAGE PRE-PROCESSING =====
+        async function preprocessImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.getElementById('processCanvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Redimensionar para um tamanho bom para OCR (máx 1500px)
+                        let width = img.width;
+                        let height = img.height;
+                        const maxDim = 1500;
+                        if (width > height && width > maxDim) {
+                            height *= maxDim / width;
+                            width = maxDim;
+                        } else if (height > maxDim) {
+                            width *= maxDim / height;
+                            height = maxDim;
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        
+                        // Desenhar e aplicar filtros básicos
+                        ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        resolve(canvas.toDataURL('image/jpeg', 0.9));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         // ===== FILE INPUT =====
         const fileInput = document.getElementById('fileInput');
 
@@ -423,7 +463,12 @@
             document.getElementById('ocrLoading').classList.add('show');
 
             try {
-                const result = await Tesseract.recognize(file, 'por', { logger: (m) => console.log(m) });
+                // Pré-processar a imagem antes do OCR
+                const processedImageData = await preprocessImage(file);
+                
+                const result = await Tesseract.recognize(processedImageData, 'por', { 
+                    logger: (m) => console.log(m) 
+                });
                 const texto = result.data.text;
 
                 document.getElementById('textPreview').textContent = texto;
@@ -481,7 +526,7 @@
                 </div>
                 <div class="validation-item">
                     <span class="validation-label">✅ Diferença</span>
-                    <span class="validation-value ${diffPercent <= 5 ? 'ok' : (diffPercent <= 15 ? '' : 'error')}">R$ ${diferenca.toFixed(2).replace('.', ',')} (${diffPercent.toFixed(1)}%)</span>
+                    <span class="validation-value ${diffPercent <= 10 ? 'ok' : (diffPercent <= 25 ? '' : 'error')}">R$ ${diferenca.toFixed(2).replace('.', ',')} (${diffPercent.toFixed(1)}%)</span>
                 </div>
             `;
 
@@ -497,14 +542,14 @@
                 message.innerHTML = '<strong>Não conseguimos ler os dados.</strong><br>Tire outra foto com mais luz e foco.';
                 btnConfirm.disabled = true;
                 btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
-            } else if (diffPercent <= 5) {
+            } else if (diffPercent <= 10) {
                 title.className = 'validation-title success';
                 title.textContent = '✅ Dados validados!';
                 message.className = 'validation-message success';
                 message.innerHTML = '<strong>As contas batem!</strong><br>O OCR leu ' + jogos.length + ' jogos corretamente.';
                 btnConfirm.disabled = false;
                 btnRetake.style.display = 'none';
-            } else if (diffPercent <= 15) {
+            } else if (diffPercent <= 25) {
                 title.className = 'validation-title checking';
                 title.textContent = '⚠️ Pequena divergência';
                 message.className = 'validation-message success';
@@ -601,6 +646,9 @@
                     <option value="MEGA">MEGA</option>
                     <option value="QUINA">QUINA</option>
                     <option value="LFACIL">LFACIL</option>
+                    <option value="LOTO">LOTO</option>
+                    <option value="LOTOMANIA">LOTOMANIA</option>
+                    <option value="TIMEMANIA">TIMEMANIA</option>
                 </select>
                 <input type="number" id="qt_${id}" placeholder="Qt" style="max-width:60px;">
                 <input type="number" id="bolao_${id}" placeholder="Bolão R$" step="0.01">
@@ -623,7 +671,7 @@
                 if (qt > 0 && vBolao > 0) {
                     const cota = (vBolao + vTarifa) / qt;
                     currentJogos.push({
-                        modalidade: modalidade + '-XXXX',
+                        modalidade: modalidade + '-MANUAL',
                         qt, vBolao, vTarifa,
                         cota: Math.round(cota * 100) / 100
                     });
@@ -717,37 +765,31 @@
             const linhas = texto.split('\n');
 
             for (let linha of linhas) {
-                linha = linha.trim();
+                linha = linha.trim().toUpperCase();
                 if (!linha) continue;
 
-                const modalidadeMatch = linha.match(/(MEGA|QUINA|LFACIL|LOTO|LOTOMANIA|TIMEMANIA)[-\s]?(\d*)/i);
-                const qtMatch = linha.match(/(\d+)\/0/);
-                const numeros = linha.match(/\d+[,.]\d+/g);
+                // Regex melhorada para capturar modalidades e números de cota
+                const modalidadeMatch = linha.match(/(MEGA|QUINA|LFACIL|LOTO|LOTOMANIA|TIMEMANIA|DUPLA|DIA)[-\s]?(\d*)/i);
+                const qtMatch = linha.match(/(\d+)\s*[\/]\s*0/); // Captura "10/0" ou "10 / 0"
+                const numeros = linha.match(/\d+[,.]\d{2}/g); // Captura valores como 12,50
 
-                if (modalidadeMatch && qtMatch && numeros && numeros.length >= 2) {
-                    const modalidade = modalidadeMatch[1].toUpperCase() + (modalidadeMatch[2] ? '-' + modalidadeMatch[2] : '');
-                    const qt = parseInt(qtMatch[1]);
+                if (modalidadeMatch && (qtMatch || numeros)) {
+                    const modalidade = modalidadeMatch[1] + (modalidadeMatch[2] ? '-' + modalidadeMatch[2] : '');
+                    const qt = qtMatch ? parseInt(qtMatch[1]) : 1;
 
-                    const valores = numeros.slice(-3);
-
-                    let vBolao, vTarifa;
-
-                    if (valores.length >= 3) {
-                        vBolao = parseFloat(valores[0].replace(',', '.'));
-                        vTarifa = parseFloat(valores[2].replace(',', '.'));
-                    } else if (valores.length >= 2) {
-                        vBolao = parseFloat(valores[0].replace(',', '.'));
-                        vTarifa = parseFloat(valores[1].replace(',', '.'));
-                    } else {
-                        continue;
-                    }
-
-                    if (qt > 0 && vBolao > 0) {
-                        const cota = (vBolao + vTarifa) / qt;
-                        jogos.push({
-                            modalidade, qt, vBolao, vTarifa,
-                            cota: Math.round(cota * 100) / 100
-                        });
+                    if (numeros && numeros.length >= 1) {
+                        // Geralmente o valor do bolão é o primeiro valor alto e a tarifa o último pequeno
+                        let vBolao = parseFloat(numeros[0].replace(',', '.'));
+                        let vTarifa = numeros.length >= 2 ? parseFloat(numeros[numeros.length-1].replace(',', '.')) : 0;
+                        
+                        // Se só achou um número, tenta ver se ele é o bolão
+                        if (vBolao > 0) {
+                            const cota = (vBolao + vTarifa) / qt;
+                            jogos.push({
+                                modalidade, qt, vBolao, vTarifa,
+                                cota: Math.round(cota * 100) / 100
+                            });
+                        }
                     }
                 }
             }
@@ -757,21 +799,20 @@
 
         function extractTotal(texto) {
             const linhas = texto.split('\n');
+            let maxVal = 0;
             for (let linha of linhas) {
                 linha = linha.trim().toUpperCase();
-                if (linha.includes('TOTAL') && !linha.includes('TARIFA') && !linha.includes('GERAL')) {
-                    const numeros = linha.match(/\d+[,.]\d+/g);
+                if (linha.includes('TOTAL') || linha.includes('VALOR') || linha.includes('PAGO')) {
+                    const numeros = linha.match(/\d+[,.]\d{2}/g);
                     if (numeros) {
-                        let maxVal = 0;
                         for (const num of numeros) {
                             const val = parseFloat(num.replace(',', '.'));
                             if (val > maxVal) maxVal = val;
                         }
-                        if (maxVal > 100) return maxVal;
                     }
                 }
             }
-            return 0;
+            return maxVal;
         }
     </script>
 </body>
