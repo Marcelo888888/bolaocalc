@@ -1,0 +1,10 @@
+{
+  "name": "BolãoCalc CAIXA",
+  "short_name": "BolãoCalc",
+  "description": "Calculadora de cotas para bolões da Lotérica CAIXA",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#0047AB",
+  "orientation": "portrait"
+}

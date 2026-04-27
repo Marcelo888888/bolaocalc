@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0047AB">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>🎰 BolãoCalc CAIXA</title>
+    <link rel="manifest" href="manifest.json">
+    <script src='https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js'></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+        .container { max-width: 500px; margin: 0 auto; padding: 15px; }
+
+        .header { text-align: center; padding: 20px 0 15px; }
+        .header h1 { font-size: 1.5em; color: #00d4ff; text-shadow: 0 0 20px rgba(0,212,255,0.3); }
+        .header p { color: #8892b0; font-size: 0.85em; margin-top: 5px; }
+
+        .install-prompt {
+            display: none; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3);
+            border-radius: 15px; padding: 15px; margin-bottom: 15px; text-align: center;
+        }
+        .install-prompt.show { display: block; }
+        .btn-install {
+            padding: 10px 20px; background: #00d4ff; color: #1a1a2e; border: none;
+            border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px;
+        }
+
+        .attempts-bar {
+            display: flex; justify-content: center; gap: 8px;
+            margin-bottom: 15px; padding: 10px;
+        }
+        .attempt-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); transition: all 0.3s;
+        }
+        .attempt-dot.active { background: #00d4ff; box-shadow: 0 0 10px rgba(0,212,255,0.5); }
+        .attempt-dot.success { background: #28a745; }
+        .attempt-dot.error { background: #dc3545; }
+
+        .attempts-text { text-align: center; color: #8892b0; font-size: 0.85em; margin-bottom: 10px; }
+
+        .camera-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 20px; padding: 20px; margin-bottom: 15px; text-align: center;
+        }
+        .camera-icon { font-size: 3em; margin-bottom: 10px; }
+        .btn-camera {
+            display: inline-block; width: 100%; padding: 18px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #1a1a2e; border: none; border-radius: 15px;
+            font-size: 1.1em; font-weight: bold; cursor: pointer; margin: 10px 0;
+        }
+        .btn-camera:active { transform: scale(0.97); }
+
+        .hint-box {
+            background: rgba(255,193,7,0.1); border-left: 3px solid #ffc107;
+            padding: 12px; border-radius: 0 10px 10px 0;
+            font-size: 0.8em; color: #ffd54f; margin-top: 15px; line-height: 1.5;
+        }
+
+        .ocr-loading {
+            display: none; text-align: center; padding: 30px;
+        }
+        .ocr-loading.show { display: block; }
+        .scan-line {
+            width: 100%; height: 3px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            animation: scan 2s infinite; margin: 20px 0;
+        }
+        @keyframes scan {
+            0% { transform: translateY(-50px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(50px); opacity: 0; }
+        }
+
+        .validation-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
+        }
+        .validation-card.show { display: block; animation: fadeIn 0.5s; }
+
+        .validation-title {
+            text-align: center; font-size: 1.1em; font-weight: bold; margin-bottom: 15px;
+        }
+        .validation-title.success { color: #28a745; }
+        .validation-title.error { color: #ff6b6b; }
+        .validation-title.checking { color: #ffc107; }
+
+        .validation-details {
+            background: rgba(0,0,0,0.2); border-radius: 10px;
+            padding: 12px; margin: 10px 0; font-size: 0.85em;
+        }
+        .validation-item {
+            display: flex; justify-content: space-between;
+            padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .validation-item:last-child { border-bottom: none; }
+        .validation-label { color: #8892b0; }
+        .validation-value { font-weight: bold; }
+        .validation-value.ok { color: #28a745; }
+        .validation-value.error { color: #ff6b6b; }
+
+        .validation-message {
+            text-align: center; padding: 15px; border-radius: 10px;
+            margin: 15px 0; font-size: 0.9em;
+        }
+        .validation-message.success {
+            background: rgba(40,167,69,0.1); border: 1px solid rgba(40,167,69,0.3); color: #28a745;
+        }
+        .validation-message.error {
+            background: rgba(220,53,69,0.1); border: 1px solid rgba(220,53,69,0.3); color: #ff6b6b;
+        }
+
+        .btn-confirm {
+            width: 100%; padding: 16px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #1a1a2e; border: none; border-radius: 15px;
+            font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px;
+        }
+        .btn-confirm:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+        .btn-retake {
+            width: 100%; padding: 14px;
+            background: rgba(220,53,69,0.2); color: #ff6b6b;
+            border: 1px solid rgba(220,53,69,0.5); border-radius: 15px;
+            font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 10px;
+        }
+
+        .detail-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
+        }
+        .detail-card.show { display: block; animation: fadeIn 0.5s; }
+
+        .detail-title {
+            text-align: center; color: #00d4ff;
+            font-size: 1.1em; font-weight: bold; margin-bottom: 15px;
+        }
+
+        .detail-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.85em; margin-bottom: 15px;
+        }
+        .detail-table th {
+            background: rgba(0,212,255,0.15); color: #00d4ff;
+            padding: 10px 6px; text-align: center; font-size: 0.85em;
+        }
+        .detail-table td {
+            padding: 10px 6px; text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: #ccd6f6; font-size: 0.85em;
+        }
+        .detail-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+        .result-card {
+            background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.3);
+            border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
+        }
+        .result-card.show { display: block; animation: fadeIn 0.5s; }
+
+        .result-title {
+            text-align: center; color: #00d4ff;
+            font-size: 1.1em; font-weight: bold; margin-bottom: 15px;
+        }
+
+        .summary-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; margin-bottom: 15px;
+        }
+        .summary-item {
+            background: rgba(0,0,0,0.2); padding: 15px;
+            border-radius: 12px; text-align: center;
+        }
+        .summary-item .valor {
+            font-size: 1.4em; font-weight: bold; color: #00d4ff;
+        }
+        .summary-item .label {
+            font-size: 0.75em; color: #8892b0; margin-top: 5px;
+        }
+
+        .group-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.95em; margin-top: 10px;
+        }
+        .group-table th {
+            background: rgba(0,212,255,0.2); color: #00d4ff;
+            padding: 12px; text-align: center;
+        }
+        .group-table td {
+            padding: 12px; text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: #ccd6f6;
+        }
+        .group-table tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+        .group-table .total-row {
+            font-weight: bold; background: rgba(0,212,255,0.15) !important;
+            color: #00d4ff;
+        }
+
+        .btn-share {
+            width: 100%; padding: 16px;
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            color: white; border: none; border-radius: 15px;
+            font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 15px;
+        }
+        .btn-reset {
+            width: 100%; padding: 14px;
+            background: rgba(220,53,69,0.2); color: #ff6b6b;
+            border: 1px solid rgba(220,53,69,0.5); border-radius: 15px;
+            font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 10px;
+        }
+
+        .manual-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
+        }
+        .manual-card.show { display: block; animation: fadeIn 0.5s; }
+
+        .manual-title {
+            text-align: center; color: #ffc107;
+            font-size: 1.1em; font-weight: bold; margin-bottom: 15px;
+        }
+
+        .manual-input-row {
+            display: flex; gap: 8px; margin-bottom: 10px; align-items: center;
+        }
+        .manual-input-row input, .manual-input-row select {
+            padding: 10px; border: 1px solid rgba(0,212,255,0.3);
+            border-radius: 8px; background: rgba(0,0,0,0.3);
+            color: #ccd6f6; font-size: 0.9em; flex: 1;
+        }
+        .manual-input-row input::placeholder { color: #8892b0; }
+
+        .btn-add-manual {
+            width: 100%; padding: 12px;
+            background: rgba(0,212,255,0.1); color: #00d4ff;
+            border: 1px solid rgba(0,212,255,0.3); border-radius: 10px;
+            font-size: 0.9em; font-weight: bold; cursor: pointer; margin-top: 5px;
+        }
+
+        .text-preview {
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 10px; padding: 15px; margin: 15px 0;
+            font-family: 'Courier New', monospace; font-size: 0.8em;
+            color: #8892b0; max-height: 150px; overflow-y: auto;
+            white-space: pre-wrap; display: none;
+        }
+        .text-preview.show { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎰 BolãoCalc</h1>
+            <p>Leia o comprovante da Lotérica CAIXA</p>
+        </div>
+
+        <div class="install-prompt" id="installPrompt">
+            <p>📲 <strong>Instale este app!</strong></p>
+            <p style="font-size:0.85em;color:#8892b0;margin:5px 0;">Funciona offline e fica na tela inicial</p>
+            <button class="btn-install" onclick="installApp()">➕ Adicionar à Tela Inicial</button>
+        </div>
+
+        <div class="attempts-text" id="attemptsText">Tentativa 1 de 3</div>
+        <div class="attempts-bar" id="attemptsBar">
+            <div class="attempt-dot active" id="dot1"></div>
+            <div class="attempt-dot" id="dot2"></div>
+            <div class="attempt-dot" id="dot3"></div>
+        </div>
+
+        <div class="camera-card" id="cameraSection">
+            <div class="camera-icon">📷</div>
+            <p style="color:#ccd6f6;margin-bottom:15px;">Tire foto do comprovante do bolão</p>
+
+            <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+            <button class="btn-camera" onclick="document.getElementById('fileInput').click()">
+                📸 Tirar Foto / Escolher Imagem
+            </button>
+
+            <div class="hint-box">
+                💡 <strong>Dicas para foto boa:</strong><br>
+                • Boa iluminação (evite sombras)<br>
+                • Comprovante retinho (não torto)<br>
+                • Evite dobras e amassados
+            </div>
+        </div>
+
+        <div class="ocr-loading" id="ocrLoading">
+            <div class="scan-line"></div>
+            <p style="color:#00d4ff;font-size:1.1em;">🔍 Lendo comprovante...</p>
+            <p style="color:#8892b0;font-size:0.85em;margin-top:10px;">Isso pode levar alguns segundos</p>
+        </div>
+
+        <div class="validation-card" id="validationCard">
+            <div class="validation-title checking" id="validationTitle">🧮 Validando dados...</div>
+            <div class="validation-details" id="validationDetails"></div>
+            <div class="validation-message" id="validationMessage"></div>
+            <button class="btn-confirm" id="btnConfirm" onclick="showDetails()" disabled>
+                ✅ Ver Detalhes dos Jogos
+            </button>
+            <button class="btn-retake" id="btnRetake" onclick="retakePhoto()">
+                📸 Tentar Outra Foto
+            </button>
+        </div>
+
+        <div class="detail-card" id="detailCard">
+            <div class="detail-title">📋 Detalhes dos Jogos</div>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>#</th><th>Modalidade</th><th>Qt</th><th>V.Bolão</th><th>V.Tarifa</th><th>Cota</th>
+                    </tr>
+                </thead>
+                <tbody id="detailCorpo"></tbody>
+            </table>
+            <button class="btn-confirm" onclick="showResult()">
+                📊 Ver Tabela Agrupada por Cota
+            </button>
+            <button class="btn-retake" onclick="retakePhoto()">
+                📸 Tirar Outra Foto
+            </button>
+        </div>
+
+        <div class="manual-card" id="manualCard">
+            <div class="manual-title">✏️ Correção Manual (Após 3 tentativas)</div>
+            <p style="color:#8892b0;font-size:0.85em;text-align:center;margin-bottom:15px;">
+                Adicione os jogos manualmente:
+            </p>
+            <div id="manualInputs"></div>
+            <button class="btn-add-manual" onclick="addManualRow()">➕ Adicionar Jogo</button>
+            <button class="btn-confirm" onclick="calculateManual()" style="margin-top:15px;">
+                🧮 Calcular Cotas
+            </button>
+            <button class="btn-reset" onclick="resetAll()" style="margin-top:10px;">
+                🔄 Começar de Novo
+            </button>
+        </div>
+
+        <div class="text-preview" id="textPreview"></div>
+
+        <div class="result-card" id="resultCard">
+            <div class="result-title">📊 Tabela Agrupada por Cota</div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="valor" id="totalCotas">0</div>
+                    <div class="label">Total de Cotas</div>
+                </div>
+                <div class="summary-item">
+                    <div class="valor" id="totalValor">R$ 0,00</div>
+                    <div class="label">Valor Total</div>
+                </div>
+            </div>
+            <table class="group-table">
+                <thead>
+                    <tr><th>COTA (R$)</th><th>Qt</th></tr>
+                </thead>
+                <tbody id="tabelaCorpo"></tbody>
+            </table>
+            <button class="btn-share" onclick="compartilhar()">📤 Compartilhar no WhatsApp</button>
+            <button class="btn-reset" onclick="resetAll()">🔄 Novo Bolão</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== STATE =====
+        let attempts = [];
+        let currentAttempt = 0;
+        let maxAttempts = 3;
+        let currentJogos = [];
+        let currentTotalComprovante = 0;
+        let deferredPrompt;
+
+        // ===== PWA =====
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installPrompt').classList.add('show');
+        });
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choice) => {
+                    if (choice.outcome === 'accepted') {
+                        document.getElementById('installPrompt').style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(() => console.log('SW registrado'))
+                .catch((err) => console.log('SW erro:', err));
+        }
+
+        // ===== FILE INPUT =====
+        const fileInput = document.getElementById('fileInput');
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            currentAttempt++;
+            updateAttemptsUI();
+
+            document.getElementById('cameraSection').style.display = 'none';
+            document.getElementById('ocrLoading').classList.add('show');
+
+            try {
+                const result = await Tesseract.recognize(file, 'por', { logger: (m) => console.log(m) });
+                const texto = result.data.text;
+
+                document.getElementById('textPreview').textContent = texto;
+                document.getElementById('textPreview').classList.add('show');
+
+                const jogos = extractJogos(texto);
+                const total = extractTotal(texto);
+
+                attempts.push({ id: currentAttempt, jogos, total });
+
+                document.getElementById('ocrLoading').classList.remove('show');
+                validateData(jogos, total);
+
+            } catch (err) {
+                console.error('OCR erro:', err);
+                document.getElementById('ocrLoading').classList.remove('show');
+                handleFailedAttempt();
+            }
+        });
+
+        function updateAttemptsUI() {
+            document.getElementById('attemptsText').textContent = `Tentativa ${currentAttempt} de ${maxAttempts}`;
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(`dot${i}`);
+                dot.className = 'attempt-dot';
+                if (i < currentAttempt) dot.classList.add('error');
+                else if (i === currentAttempt) dot.classList.add('active');
+            }
+        }
+
+        // ===== VALIDATION =====
+        function validateData(jogos, totalComprovante) {
+            currentJogos = jogos;
+            currentTotalComprovante = totalComprovante;
+
+            const validationCard = document.getElementById('validationCard');
+            validationCard.classList.add('show');
+
+            const somaBoloes = jogos.reduce((s, j) => s + j.v_bolao, 0);
+            const diferenca = Math.abs(somaBoloes - totalComprovante);
+            const diffPercent = totalComprovante > 0 ? (diferenca / totalComprovante) * 100 : (jogos.length === 0 ? 100 : 0);
+
+            document.getElementById('validationDetails').innerHTML = `
+                <div class="validation-item">
+                    <span class="validation-label">📄 Jogos encontrados</span>
+                    <span class="validation-value ${jogos.length > 0 ? 'ok' : 'error'}">${jogos.length} jogos</span>
+                </div>
+                <div class="validation-item">
+                    <span class="validation-label">🧮 Soma dos bolões</span>
+                    <span class="validation-value">R$ ${somaBoloes.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div class="validation-item">
+                    <span class="validation-label">📋 Total no comprovante</span>
+                    <span class="validation-value ${totalComprovante > 0 ? 'ok' : 'error'}">R$ ${totalComprovante > 0 ? totalComprovante.toFixed(2).replace('.', ',') : 'Não encontrado'}</span>
+                </div>
+                <div class="validation-item">
+                    <span class="validation-label">✅ Diferença</span>
+                    <span class="validation-value ${diffPercent <= 5 ? 'ok' : (diffPercent <= 15 ? '' : 'error')}">R$ ${diferenca.toFixed(2).replace('.', ',')} (${diffPercent.toFixed(1)}%)</span>
+                </div>
+            `;
+
+            const title = document.getElementById('validationTitle');
+            const message = document.getElementById('validationMessage');
+            const btnConfirm = document.getElementById('btnConfirm');
+            const btnRetake = document.getElementById('btnRetake');
+
+            if (jogos.length === 0) {
+                title.className = 'validation-title error';
+                title.textContent = '❌ Nenhum jogo encontrado';
+                message.className = 'validation-message error';
+                message.innerHTML = '<strong>Não conseguimos ler os dados.</strong><br>Tire outra foto com mais luz e foco.';
+                btnConfirm.disabled = true;
+                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
+            } else if (diffPercent <= 5) {
+                title.className = 'validation-title success';
+                title.textContent = '✅ Dados validados!';
+                message.className = 'validation-message success';
+                message.innerHTML = '<strong>As contas batem!</strong><br>O OCR leu ' + jogos.length + ' jogos corretamente.';
+                btnConfirm.disabled = false;
+                btnRetake.style.display = 'none';
+            } else if (diffPercent <= 15) {
+                title.className = 'validation-title checking';
+                title.textContent = '⚠️ Pequena divergência';
+                message.className = 'validation-message success';
+                message.innerHTML = '<strong>Diferença de ' + diffPercent.toFixed(1) + '%.</strong><br>Verifique os valores antes de prosseguir.';
+                btnConfirm.disabled = false;
+                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
+            } else {
+                title.className = 'validation-title error';
+                title.textContent = '❌ Dados não conferem!';
+                message.className = 'validation-message error';
+                message.innerHTML = '<strong>Diferença muito grande (' + diffPercent.toFixed(1) + '%).</strong><br>O OCR errou a leitura. ' + (currentAttempt < maxAttempts ? 'Tente outra foto!' : 'Corrija manualmente.');
+                btnConfirm.disabled = true;
+                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
+            }
+        }
+
+        // ===== SHOW DETAILS =====
+        function showDetails() {
+            document.getElementById('validationCard').classList.remove('show');
+            document.getElementById('detailCard').classList.add('show');
+
+            const tbody = document.getElementById('detailCorpo');
+            tbody.innerHTML = currentJogos.map((jogo, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${jogo.modalidade}</td>
+                    <td>${jogo.qt}</td>
+                    <td>R$ ${jogo.v_bolao.toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${jogo.v_tarifa.toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${jogo.cota.toFixed(2).replace('.', ',')}</td>
+                </tr>
+            `).join('') + `
+                <tr style="font-weight:bold; background:rgba(0,212,255,0.1);">
+                    <td colspan="2">TOTAIS</td>
+                    <td>${currentJogos.reduce((s, j) => s + j.qt, 0)}</td>
+                    <td>R$ ${currentJogos.reduce((s, j) => s + j.v_bolao, 0).toFixed(2).replace('.', ',')}</td>
+                    <td>R$ ${currentJogos.reduce((s, j) => s + j.v_tarifa, 0).toFixed(2).replace('.', ',')}</td>
+                    <td>-</td>
+                </tr>
+            `;
+        }
+
+        // ===== SHOW RESULT (Grouped by Cota) =====
+        function showResult() {
+            document.getElementById('detailCard').classList.remove('show');
+
+            const grupos = {};
+            let totalCotas = 0;
+            let totalValor = 0;
+
+            for (const jogo of currentJogos) {
+                const cotaKey = jogo.cota.toFixed(2);
+                if (!grupos[cotaKey]) grupos[cotaKey] = 0;
+                grupos[cotaKey] += jogo.qt;
+                totalCotas += jogo.qt;
+                totalValor += (jogo.v_bolao + jogo.v_tarifa);
+            }
+
+            const cotasOrdenadas = Object.keys(grupos).sort((a, b) => parseFloat(a) - parseFloat(b));
+
+            document.getElementById('totalCotas').textContent = totalCotas;
+            document.getElementById('totalValor').textContent = 'R$ ' + totalValor.toFixed(2).replace('.', ',');
+
+            document.getElementById('tabelaCorpo').innerHTML = cotasOrdenadas.map(cota => `
+                <tr>
+                    <td>R$ ${cota.replace('.', ',')}</td>
+                    <td>${grupos[cota]}</td>
+                </tr>
+            `).join('') + `
+                <tr class="total-row">
+                    <td>TOTAL</td>
+                    <td>${totalCotas}</td>
+                </tr>
+            `;
+
+            document.getElementById('resultCard').classList.add('show');
+        }
+
+        // ===== MANUAL EDIT =====
+        function showManualEdit() {
+            document.getElementById('manualCard').classList.add('show');
+            document.getElementById('manualInputs').innerHTML = '';
+            addManualRow();
+        }
+
+        function addManualRow() {
+            const container = document.getElementById('manualInputs');
+            const id = container.children.length;
+
+            const div = document.createElement('div');
+            div.className = 'manual-input-row';
+            div.innerHTML = `
+                <select id="mod_${id}">
+                    <option value="MEGA">MEGA</option>
+                    <option value="QUINA">QUINA</option>
+                    <option value="LFACIL">LFACIL</option>
+                </select>
+                <input type="number" id="qt_${id}" placeholder="Qt" style="max-width:60px;">
+                <input type="number" id="bolao_${id}" placeholder="Bolão R$" step="0.01">
+                <input type="number" id="tarifa_${id}" placeholder="Tarifa R$" step="0.01">
+            `;
+            container.appendChild(div);
+        }
+
+        function calculateManual() {
+            const container = document.getElementById('manualInputs');
+            const rows = container.querySelectorAll('.manual-input-row');
+
+            currentJogos = [];
+            rows.forEach((row) => {
+                const modalidade = row.querySelector(`[id^="mod_"]`).value;
+                const qt = parseInt(row.querySelector(`[id^="qt_"]`).value) || 0;
+                const vBolao = parseFloat(row.querySelector(`[id^="bolao_"]`).value) || 0;
+                const vTarifa = parseFloat(row.querySelector(`[id^="tarifa_"]`).value) || 0;
+
+                if (qt > 0 && vBolao > 0) {
+                    const cota = (vBolao + vTarifa) / qt;
+                    currentJogos.push({
+                        modalidade: modalidade + '-XXXX',
+                        qt, vBolao, vTarifa,
+                        cota: Math.round(cota * 100) / 100
+                    });
+                }
+            });
+
+            document.getElementById('manualCard').classList.remove('show');
+            showDetails();
+        }
+
+        // ===== COMPARTILHAR =====
+        function compartilhar() {
+            const totalCotas = document.getElementById('totalCotas').textContent;
+            const totalValor = document.getElementById('totalValor').textContent;
+            const linhas = document.querySelectorAll('#tabelaCorpo tr:not(.total-row)');
+
+            let texto = '🎰 *Resumo do Bolão*\n\n';
+            texto += '*Cota (R$)* │ *Qt*\n';
+            texto += '───────────┼─────\n';
+
+            linhas.forEach(linha => {
+                const cols = linha.querySelectorAll('td');
+                texto += `${cols[0].textContent} │ ${cols[1].textContent}\n`;
+            });
+
+            texto += `───────────┼─────\n`;
+            texto += `*TOTAL* │ *${totalCotas}*\n\n`;
+            texto += `💰 *Valor Total:* ${totalValor}`;
+
+            if (navigator.share) {
+                navigator.share({ title: 'Resumo do Bolão', text: texto });
+            } else {
+                navigator.clipboard.writeText(texto).then(() => {
+                    alert('✅ Resumo copiado! Cole no WhatsApp.');
+                }).catch(() => {
+                    const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
+                    window.open(url, '_blank');
+                });
+            }
+        }
+
+        // ===== RETAKE / RESET =====
+        function retakePhoto() {
+            if (currentAttempt >= maxAttempts) {
+                document.getElementById('validationCard').classList.remove('show');
+                document.getElementById('detailCard').classList.remove('show');
+                showManualEdit();
+            } else {
+                document.getElementById('validationCard').classList.remove('show');
+                document.getElementById('detailCard').classList.remove('show');
+                document.getElementById('cameraSection').style.display = 'block';
+                fileInput.value = '';
+            }
+        }
+
+        function resetAll() {
+            attempts = [];
+            currentAttempt = 0;
+            currentJogos = [];
+            currentTotalComprovante = 0;
+
+            document.getElementById('attemptsText').textContent = 'Tentativa 1 de 3';
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`dot${i}`).className = 'attempt-dot';
+            }
+            document.getElementById('dot1').classList.add('active');
+
+            document.getElementById('cameraSection').style.display = 'block';
+            document.getElementById('validationCard').classList.remove('show');
+            document.getElementById('detailCard').classList.remove('show');
+            document.getElementById('manualCard').classList.remove('show');
+            document.getElementById('resultCard').classList.remove('show');
+            document.getElementById('textPreview').classList.remove('show');
+            document.getElementById('textPreview').textContent = '';
+            fileInput.value = '';
+        }
+
+        function handleFailedAttempt() {
+            if (currentAttempt >= maxAttempts) {
+                document.getElementById('validationCard').classList.remove('show');
+                showManualEdit();
+            } else {
+                document.getElementById('cameraSection').style.display = 'block';
+                fileInput.value = '';
+            }
+        }
+
+        // ===== HELPERS =====
+        function extractJogos(texto) {
+            const jogos = [];
+            const linhas = texto.split('\n');
+
+            for (let linha of linhas) {
+                linha = linha.trim();
+                if (!linha) continue;
+
+                const modalidadeMatch = linha.match(/(MEGA|QUINA|LFACIL|LOTO|LOTOMANIA|TIMEMANIA)[-\s]?(\d*)/i);
+                const qtMatch = linha.match(/(\d+)\/0/);
+                const numeros = linha.match(/\d+[,.]\d+/g);
+
+                if (modalidadeMatch && qtMatch && numeros && numeros.length >= 2) {
+                    const modalidade = modalidadeMatch[1].toUpperCase() + (modalidadeMatch[2] ? '-' + modalidadeMatch[2] : '');
+                    const qt = parseInt(qtMatch[1]);
+
+                    const valores = numeros.slice(-3);
+
+                    let vBolao, vTarifa;
+
+                    if (valores.length >= 3) {
+                        vBolao = parseFloat(valores[0].replace(',', '.'));
+                        vTarifa = parseFloat(valores[2].replace(',', '.'));
+                    } else if (valores.length >= 2) {
+                        vBolao = parseFloat(valores[0].replace(',', '.'));
+                        vTarifa = parseFloat(valores[1].replace(',', '.'));
+                    } else {
+                        continue;
+                    }
+
+                    if (qt > 0 && vBolao > 0) {
+                        const cota = (vBolao + vTarifa) / qt;
+                        jogos.push({
+                            modalidade, qt, vBolao, vTarifa,
+                            cota: Math.round(cota * 100) / 100
+                        });
+                    }
+                }
+            }
+
+            return jogos;
+        }
+
+        function extractTotal(texto) {
+            const linhas = texto.split('\n');
+            for (let linha of linhas) {
+                linha = linha.trim().toUpperCase();
+                if (linha.includes('TOTAL') && !linha.includes('TARIFA') && !linha.includes('GERAL')) {
+                    const numeros = linha.match(/\d+[,.]\d+/g);
+                    if (numeros) {
+                        let maxVal = 0;
+                        for (const num of numeros) {
+                            const val = parseFloat(num.replace(',', '.'));
+                            if (val > maxVal) maxVal = val;
+                        }
+                        if (maxVal > 100) return maxVal;
+                    }
+                }
+            }
+            return 0;
+        }
+    </script>
+</body>
+</html>
