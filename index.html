@@ -288,18 +288,19 @@
 
         <div class="camera-card" id="cameraSection">
             <div class="camera-icon">📷</div>
-            <p style="color:#ccd6f6;margin-bottom:15px;">Tire foto do comprovante do bolão</p>
+            <p style="color:#ccd6f6;margin-bottom:15px;">Tire foto ou digite os dados do comprovante</p>
 
             <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
             <button class="btn-camera" onclick="document.getElementById('fileInput').click()">
                 📸 Tirar Foto / Escolher Imagem
             </button>
 
+            <button class="btn-camera" onclick="showManualEdit()" style="background:linear-gradient(135deg,#ffc107,#ff8f00);margin-top:5px;">
+                ✏️ Digitar Manualmente
+            </button>
+
             <div class="hint-box">
-                💡 <strong>Dicas para foto boa:</strong><br>
-                • Boa iluminação (evite sombras)<br>
-                • Comprovante retinho (não torto)<br>
-                • Evite dobras e amassados
+                💡 <strong>Dica:</strong> Se a foto não funcionar, use <strong>"Digitar Manualmente"</strong> — é mais rápido e confiável!
             </div>
         </div>
 
@@ -340,17 +341,20 @@
         </div>
 
         <div class="manual-card" id="manualCard">
-            <div class="manual-title">✏️ Correção Manual (Após 3 tentativas)</div>
-            <p style="color:#8892b0;font-size:0.85em;text-align:center;margin-bottom:15px;">
-                Adicione os jogos manualmente:
+            <div class="manual-title">✏️ Entrada Manual dos Jogos</div>
+            <p style="color:#8892b0;font-size:0.85em;text-align:center;margin-bottom:5px;">
+                Digite os dados do comprovante:
+            </p>
+            <p style="color:#ffc107;font-size:0.78em;text-align:center;margin-bottom:15px;">
+                Modalidade → Quantidade → Valor do Bolão → Tarifa
             </p>
             <div id="manualInputs"></div>
-            <button class="btn-add-manual" onclick="addManualRow()">➕ Adicionar Jogo</button>
+            <button class="btn-add-manual" onclick="addManualRow()">➕ Adicionar Outro Jogo</button>
             <button class="btn-confirm" onclick="calculateManual()" style="margin-top:15px;">
                 🧮 Calcular Cotas
             </button>
             <button class="btn-reset" onclick="resetAll()" style="margin-top:10px;">
-                🔄 Começar de Novo
+                ← Voltar ao Início
             </button>
         </div>
 
@@ -668,13 +672,13 @@
             rows.forEach((row) => {
                 const modalidade = row.querySelector(`[id^="mod_"]`).value;
                 const qt = parseInt(row.querySelector(`[id^="qt_"]`).value) || 0;
-                const vBolao = parseFloat(row.querySelector(`[id^="bolao_"]`).value) || 0;
-                const vTarifa = parseFloat(row.querySelector(`[id^="tarifa_"]`).value) || 0;
+                const vBolao = parseFloat(row.querySelector(`[id^="bolao_"]`).value.replace(',','.')) || 0;
+                const vTarifa = parseFloat(row.querySelector(`[id^="tarifa_"]`).value.replace(',','.')) || 0;
 
                 if (qt > 0 && vBolao > 0) {
                     const cota = (vBolao + vTarifa) / qt;
                     currentJogos.push({
-                        modalidade: modalidade + '-MANUAL',
+                        modalidade,
                         qt, vBolao, vTarifa,
                         cota: Math.round(cota * 100) / 100
                     });
@@ -767,33 +771,62 @@
             const jogos = [];
             const linhas = texto.split('\n');
 
-            for (let linha of linhas) {
-                linha = linha.trim().toUpperCase();
+            for (let i = 0; i < linhas.length; i++) {
+                let linha = linhas[i].trim().toUpperCase();
                 if (!linha) continue;
 
-                // Regex melhorada para capturar modalidades e números de cota
-                const modalidadeMatch = linha.match(/(MEGA|QUINA|LFACIL|LOTO|LOTOMANIA|TIMEMANIA|DUPLA|DIA)[-\s]?(\d*)/i);
-                const qtMatch = linha.match(/(\d+)\s*[\/]\s*0/); // Captura "10/0" ou "10 / 0"
-                const numeros = linha.match(/\d+[,.]\d{2}/g); // Captura valores como 12,50
+                // Padrão 1: "MEGA-SENA 10 JOGOS R$ 35,00 TARIFA R$ 5,25"
+                // Padrão 2: "MEGA 10/0 35,00 5,25"
+                // Padrão 3: linhas separadas com modalidade em uma e valores na próxima
+                const modalidades = ['MEGA.?SENA','MEGA','QUINA','LOTOFACIL','LFACIL','LOTO.?FACIL','LOTOMANIA','TIMEMANIA','DUPLA.?SENA','DUPLA','DIA.?DE.?SORTE','DIA'];
+                const modRegex = new RegExp('(' + modalidades.join('|') + ')', 'i');
+                const modMatch = linha.match(modRegex);
 
-                if (modalidadeMatch && (qtMatch || numeros)) {
-                    const modalidade = modalidadeMatch[1] + (modalidadeMatch[2] ? '-' + modalidadeMatch[2] : '');
-                    const qt = qtMatch ? parseInt(qtMatch[1]) : 1;
+                if (!modMatch) continue;
 
-                    if (numeros && numeros.length >= 1) {
-                        // Geralmente o valor do bolão é o primeiro valor alto e a tarifa o último pequeno
-                        let vBolao = parseFloat(numeros[0].replace(',', '.'));
-                        let vTarifa = numeros.length >= 2 ? parseFloat(numeros[numeros.length-1].replace(',', '.')) : 0;
-                        
-                        // Se só achou um número, tenta ver se ele é o bolão
-                        if (vBolao > 0) {
-                            const cota = (vBolao + vTarifa) / qt;
-                            jogos.push({
-                                modalidade, qt, vBolao, vTarifa,
-                                cota: Math.round(cota * 100) / 100
-                            });
-                        }
-                    }
+                // Normalizar nome da modalidade
+                let modalidade = modMatch[1].replace(/[^A-Z]/g, '');
+                if (modalidade.includes('MEGA')) modalidade = 'MEGA';
+                else if (modalidade.includes('QUINA')) modalidade = 'QUINA';
+                else if (modalidade.includes('LFACIL') || modalidade.includes('LOTOFACIL')) modalidade = 'LOTOFÁCIL';
+                else if (modalidade.includes('LOTOMANIA')) modalidade = 'LOTOMANIA';
+                else if (modalidade.includes('TIMEMANIA')) modalidade = 'TIMEMANIA';
+                else if (modalidade.includes('DUPLA')) modalidade = 'DUPLA SENA';
+                else if (modalidade.includes('DIA')) modalidade = 'DIA DE SORTE';
+
+                // Juntar linhas próximas para capturar valores (até 2 linhas abaixo)
+                const bloco = [linha];
+                if (i+1 < linhas.length) bloco.push(linhas[i+1].trim().toUpperCase());
+                if (i+2 < linhas.length) bloco.push(linhas[i+2].trim().toUpperCase());
+                const texto_bloco = bloco.join(' ');
+
+                // Capturar quantidade de cotas
+                let qt = 1;
+                const qtMatch = texto_bloco.match(/(\d+)\s*(?:COTA[S]?|JOGO[S]?|\/\s*0|PARTICIPANTE[S]?)/i);
+                if (qtMatch) qt = parseInt(qtMatch[1]);
+                else {
+                    // Tenta pegar número isolado no início ou após modalidade
+                    const qtSimples = texto_bloco.match(/(?:MEGA|QUINA|LOTOFACIL|LFACIL|LOTOMANIA|TIMEMANIA|DUPLA|DIA)[^\d]*(\d{1,3})(?!\d|[,.]\d)/i);
+                    if (qtSimples) qt = parseInt(qtSimples[1]);
+                }
+
+                // Capturar todos os valores monetários
+                const numeros = texto_bloco.match(/R\$\s*([\d.]+,[\d]{2})|([\d.]+,[\d]{2})|([\d]+\.[\d]{2})/g);
+                if (!numeros || numeros.length === 0) continue;
+
+                const valores = numeros.map(n => parseFloat(n.replace(/R\$\s*/,'').replace('.','').replace(',','.')));
+                valores.sort((a,b) => b - a); // maior primeiro = bolão
+
+                let vBolao = valores[0] || 0;
+                let vTarifa = valores.length > 1 ? valores[valores.length - 1] : 0;
+                if (vTarifa === vBolao) vTarifa = 0;
+
+                if (vBolao > 0 && qt > 0) {
+                    const cota = (vBolao + vTarifa) / qt;
+                    jogos.push({
+                        modalidade, qt, vBolao, vTarifa,
+                        cota: Math.round(cota * 100) / 100
+                    });
                 }
             }
 
