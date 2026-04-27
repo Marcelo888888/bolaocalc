@@ -823,111 +823,173 @@
         }
 
         // ===== HELPERS =====
-        function normalizarModalidade(str) {
-            str = str.toUpperCase().replace(/[^A-Z]/g, '');
-            if (str.includes('MEGA')) return 'MEGA';
-            if (str.includes('QUINA')) return 'QUINA';
-            if (str.includes('LFACIL') || str.includes('LOTOFACIL')) return 'LOTOFÁCIL';
-            if (str.includes('LOTOMANIA')) return 'LOTOMANIA';
-            if (str.includes('TIMEMANIA') || str.includes('TMANIA')) return 'TIMEMANIA';
-            if (str.includes('DUPLA')) return 'DUPLA SENA';
-            if (str.includes('DIA')) return 'DIA DE SORTE';
-            return str;
-        }
 
         function toFloat(s) {
-            // Converte "30,00" ou "30.00" para número
             if (!s) return 0;
-            return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+            // Normaliza separadores: "17,50" → 17.50, "17.50" → 17.50
+            return parseFloat(String(s).replace(/[^\d,\.]/g,'').replace(',','.')) || 0;
+        }
+
+        function parseNumOCR(s) {
+            // Trata artefatos comuns de OCR em números
+            s = String(s).trim();
+            s = s.replace(/[;:]/g, ',');    // 6;12 → 6,12
+            s = s.replace(/\s+/g, ',');     // 6 12 → 6,12
+            s = s.replace(/[oO]/g, '0');    // letra O → zero
+            // Se for número sem vírgula com 4+ dígitos → inserir vírgula antes dos 2 últimos
+            if (/^\d{3,6}$/.test(s)) {
+                s = s.slice(0, -2) + ',' + s.slice(-2);
+            }
+            return toFloat(s);
+        }
+
+        function detectarModalidade(linha) {
+            const u = linha.toUpperCase();
+            // Fuzzy matching — OCR distorce nomes mas deixa fragmentos reconhecíveis
+            if (/MEG[A4@]/.test(u) || /M[E3]GA/.test(u)) return 'MEGA';
+            if (/QU[I1][N][A4@]/.test(u) || /UTNA/.test(u) || /UINA/.test(u) || /QUTNA/.test(u)) return 'QUINA';
+            if (/[L1][F]?[A4@]C[I1]L/.test(u) || /ACIL/.test(u) || /LCIL/.test(u) || /LFAC/.test(u)) return 'LOTOFÁCIL';
+            if (/MANIA/.test(u) && !/TIME|TIMAN/.test(u)) return 'LOTOMANIA';
+            if (/T[I1]MAN/.test(u) || /TMANIA/.test(u) || /EMANIA/.test(u)) return 'TIMEMANIA';
+            if (/DUPLA/.test(u)) return 'DUPLA SENA';
+            if (/DIA\s+DE/.test(u)) return 'DIA DE SORTE';
+            return null;
+        }
+
+        function extrairNumerosLinha(linha) {
+            // Extrai todos os números de uma linha, tolerando artefatos OCR
+            // Padrões aceitos: 17,50 | 17.50 | 1750 | 6;12 | 6 12
+            const tokens = linha.replace(/[;:]/g, ',').split(/\s+/);
+            const nums = [];
+            for (let i = 0; i < tokens.length; i++) {
+                const t = tokens[i].replace(/[^\d,\.]/g, '');
+                if (!t) continue;
+                // Par de tokens que juntos formam número (ex: "6" + "12" → 6,12)?
+                if (/^\d{1,4}$/.test(t) && i+1 < tokens.length) {
+                    const next = tokens[i+1].replace(/[^\d,\.]/g, '');
+                    if (/^\d{2}$/.test(next)) {
+                        nums.push(toFloat(t + ',' + next));
+                        i++; continue;
+                    }
+                }
+                const v = parseNumOCR(t);
+                if (v > 0) nums.push(v);
+            }
+            return nums;
         }
 
         function extractJogos(texto) {
             const jogos = [];
-            // Normalizar texto: substituir tabs e espaços múltiplos por espaço simples
             const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
-            // ============================================================
-            // PADRÃO 1: COM TARIFA
-            // Formato: MEGA-2995   3/0   30,00   35,00   10,50
-            //          MOD-CONC  QT/0  V.BOLAO  %TAR  V.TARIFA
-            // O %TAR (ex: 35,00) NÃO é valor — é percentual. Ignoramos.
-            // ============================================================
-            const reComTarifa = /^(MEGA|QUINA|LFACIL|LOTOMANIA|TIMEMANIA|TMANIA|DUPLA|DIA)[\w-]*\s+(\d+)\s*[\/\\]\s*0\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/i;
+            let inSemTarifa = false;
+            let ultimaModalidade = 'BOLÃO';
+            let tarifaPct = 0.35; // padrão 35% — atualizado se encontrado no texto
 
-            // ============================================================
-            // PADRÃO 2: SEM TARIFA
-            // Formato: MEGA   3   270,00
-            //          MOD  QTDE  VLR
-            // ============================================================
-            const reSemTarifa = /^(MEGA|QUINA|LFACIL|LOTOMANIA|TIMEMANIA|TMANIA|DUPLA|DIA)\s+(\d+)\s+([\d,\.]+)\s*$/i;
+            for (let i = 0; i < linhas.length; i++) {
+                const linha = linhas[i];
+                const linhaUp = linha.toUpperCase();
 
-            // ============================================================
-            // PADRÃO 3: Linha com 4 números (sem %TAR explícito)
-            // Formato: MEGA-2995   3/0   30,00   10,50
-            // ============================================================
-            const re4col = /^(MEGA|QUINA|LFACIL|LOTOMANIA|TIMEMANIA|TMANIA|DUPLA|DIA)[\w-]*\s+(\d+)\s*[\/\\]\s*0\s+([\d,\.]+)\s+([\d,\.]+)\s*$/i;
+                // Detectar mudança de seção
+                if (/SEM\s+TARIFA/i.test(linhaUp)) { inSemTarifa = true; continue; }
+                if (/COM\s+TARIFA/i.test(linhaUp)) { inSemTarifa = false; continue; }
 
-            for (const linha of linhas) {
-                // Ignorar linhas de cabeçalho/rodapé
-                if (/TOTAL|MOD.?CONC|C\.T|V\.BOLAO|V\.TARIFA|CAIXA ECONOMICA|RESUMO|DATA|OPERADOR|TARIFA DE SERV|MODALIDADE|QTDADE|VLR\.BOLAO/i.test(linha)) continue;
+                // Ignorar linhas de cabeçalho e ruído
+                if (/RESUMO|CAIXA\s*ECON|MOD.?CONC|V\.BOL|V\.TAR|DATA\s+DE|OPERADOR|TERM\s+\d|REV\s+\d|BOLAO\s+CAIXA|QTDADE|VLR\.BOL|MODALIDADE|TARIFA\s+DE\s+SERV/i.test(linhaUp)) continue;
 
-                let m;
+                // Ignorar se linha for só ruído (sem dígitos)
+                if (!/\d/.test(linha)) continue;
 
-                // Testa padrão COM TARIFA (5 valores: qt/0, vbolao, %tar, vtarifa)
-                m = linha.match(reComTarifa);
-                if (m) {
-                    const modalidade = normalizarModalidade(m[1]);
-                    const qt = parseInt(m[2]);
-                    const vBolao = toFloat(m[3]);
-                    // m[4] = %TAR — IGNORAR (é percentual, não valor!)
-                    const vTarifa = toFloat(m[5]);
-                    if (qt > 0 && vBolao > 0) {
-                        const cota = (vBolao + vTarifa) / qt;
-                        jogos.push({ modalidade, qt, vBolao, vTarifa, cota: Math.round(cota * 100) / 100 });
+                // Detectar modalidade (pode estar garbled)
+                const modDetectada = detectarModalidade(linhaUp);
+                if (modDetectada) ultimaModalidade = modDetectada;
+
+                // ── SEÇÃO COM TARIFA ──────────────────────────────────────
+                if (!inSemTarifa) {
+                    // Âncora principal: padrão QT/0
+                    // Aceita: 3/0, 3\/0, 3|0, 3 /0, com OCR noise
+                    const mQT = linha.match(/(\d+)\s*[\/\\|]\s*0/);
+                    if (!mQT) continue;
+                    const qt = parseInt(mQT[1]);
+                    if (qt <= 0 || qt > 50) continue; // sanidade
+
+                    // Extrair números restantes após o QT/0
+                    const posApos = linha.indexOf(mQT[0]) + mQT[0].length;
+                    const resto = linha.substring(posApos);
+                    const nums = extrairNumerosLinha(resto);
+
+                    // nums esperados: [V.BOLAO, %TAR, V.TARIFA] ou [V.BOLAO, V.TARIFA]
+                    if (nums.length === 0) continue;
+
+                    let vBolao, vTarifa;
+
+                    if (nums.length >= 3) {
+                        // 3+ números: V.BOLAO | %TAR(~35) | V.TARIFA
+                        vBolao = nums[0];
+                        // Verificar se nums[1] parece percentual (< 100 e tipo 35)
+                        if (nums[1] < 100 && nums[1] > 0) {
+                            tarifaPct = nums[1] / 100;
+                            vTarifa = nums[2];
+                        } else {
+                            vTarifa = nums[nums.length - 1];
+                        }
+                    } else if (nums.length === 2) {
+                        // 2 números: V.BOLAO | V.TARIFA (sem %TAR na linha)
+                        vBolao = nums[0];
+                        vTarifa = nums[1];
+                    } else {
+                        // 1 número: só V.BOLAO — calcular tarifa
+                        vBolao = nums[0];
+                        vTarifa = Math.round(vBolao * tarifaPct * 100) / 100;
                     }
-                    continue;
-                }
 
-                // Testa padrão 4 colunas (sem %TAR)
-                m = linha.match(re4col);
-                if (m) {
-                    const modalidade = normalizarModalidade(m[1]);
-                    const qt = parseInt(m[2]);
-                    const vBolao = toFloat(m[3]);
-                    const vTarifa = toFloat(m[4]);
-                    if (qt > 0 && vBolao > 0) {
+                    // Sanidade: bolão deve ser > tarifa
+                    if (vTarifa > vBolao) [vBolao, vTarifa] = [vTarifa, vBolao];
+
+                    if (vBolao > 0 && qt > 0) {
                         const cota = (vBolao + vTarifa) / qt;
-                        jogos.push({ modalidade, qt, vBolao, vTarifa, cota: Math.round(cota * 100) / 100 });
+                        jogos.push({
+                            modalidade: modDetectada || ultimaModalidade,
+                            qt, vBolao, vTarifa,
+                            cota: Math.round(cota * 100) / 100
+                        });
                     }
-                    continue;
                 }
+                // ── SEÇÃO SEM TARIFA ──────────────────────────────────────
+                else {
+                    // Formato: MODALIDADE  QTDE  VLR.BOLAO
+                    // Ex:      MEGA        3     270,00
+                    const nums = extrairNumerosLinha(linha);
+                    if (nums.length < 2) continue;
 
-                // Testa padrão SEM TARIFA (3 colunas)
-                m = linha.match(reSemTarifa);
-                if (m) {
-                    const modalidade = normalizarModalidade(m[1]);
-                    const qt = parseInt(m[2]);
-                    const vBolao = toFloat(m[3]);
-                    if (qt > 0 && vBolao > 0) {
+                    // Pegar QTDE (número pequeno) e VLR (número maior)
+                    const pequenos = nums.filter(n => n < 100 && n === Math.round(n));
+                    const valores  = nums.filter(n => n >= 10);
+                    if (pequenos.length === 0 || valores.length === 0) continue;
+
+                    const qt = Math.round(pequenos[0]);
+                    const vBolao = Math.max(...valores);
+
+                    if (qt > 0 && vBolao > 0 && qt < vBolao) {
                         const cota = vBolao / qt;
-                        jogos.push({ modalidade, qt, vBolao, vTarifa: 0, cota: Math.round(cota * 100) / 100 });
+                        jogos.push({
+                            modalidade: modDetectada || ultimaModalidade,
+                            qt, vBolao, vTarifa: 0,
+                            cota: Math.round(cota * 100) / 100
+                        });
                     }
-                    continue;
                 }
             }
-
             return jogos;
         }
 
         function extractTotal(texto) {
-            // Procura linha TOTAL com valor mais alto (total geral do comprovante)
             const linhas = texto.split(/\r?\n/);
             let maxVal = 0;
             for (let linha of linhas) {
                 linha = linha.trim().toUpperCase();
-                // Só linhas que sejam exatamente "TOTAL" com valores
-                if (/^\s*TOTAL\s/.test(linha) || /\bTOTAL\b/.test(linha)) {
-                    const nums = linha.match(/\d[\d.]*,\d{2}/g);
+                if (/\bTOTAL\b/.test(linha)) {
+                    const nums = linha.match(/\d[\d\.]*,\d{2}/g);
                     if (nums) {
                         for (const n of nums) {
                             const val = toFloat(n);
@@ -938,6 +1000,8 @@
             }
             return maxVal;
         }
+
+
     </script>
 </body>
 </html>
