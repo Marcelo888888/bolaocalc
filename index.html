@@ -305,8 +305,12 @@
             <p style="color:#ccd6f6;margin-bottom:15px;">Tire foto ou digite os dados do comprovante</p>
 
             <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+            <input type="file" id="fileInputGaleria" accept="image/*" style="display:none;">
             <button class="btn-camera" onclick="document.getElementById('fileInput').click()">
-                📸 Tirar Foto / Escolher Imagem
+                📸 Tirar Foto
+            </button>
+            <button class="btn-camera" onclick="document.getElementById('fileInputGaleria').click()" style="background:linear-gradient(135deg,#6c63ff,#4834d4);margin-top:5px;">
+                🖼️ Buscar na Galeria
             </button>
 
             <button class="btn-camera" onclick="showManualEdit()" style="background:linear-gradient(135deg,#ffc107,#ff8f00);margin-top:5px;">
@@ -578,14 +582,12 @@ Regras:
 
         // ===== FILE INPUT =====
         const fileInput = document.getElementById('fileInput');
+        const fileInputGaleria = document.getElementById('fileInputGaleria');
 
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
+        async function processarArquivo(file) {
             if (!file) return;
-
             currentAttempt++;
             updateAttemptsUI();
-
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
             setOcrStatus('🤖 Analisando com Gemini Vision...');
@@ -645,7 +647,10 @@ Regras:
                 document.getElementById('ocrLoading').classList.remove('show');
                 handleFailedAttempt();
             }
-        });
+        }
+
+        fileInput.addEventListener('change', e => processarArquivo(e.target.files[0]));
+        fileInputGaleria.addEventListener('change', e => processarArquivo(e.target.files[0]));
 
         function setOcrStatus(msg) {
             const el = document.querySelector('#ocrLoading p');
