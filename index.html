@@ -737,6 +737,15 @@ Formato de saída:
         const fileInput = document.getElementById('fileInput');
         const fileInputGaleria = document.getElementById('fileInputGaleria');
 
+        function showErroGemini(msg) {
+            document.getElementById('cameraSection').style.display = 'block';
+            document.getElementById('validationDetails').innerHTML = `
+                <div style="background:#1a0a0a;border:1px solid #ff6b6b;border-radius:10px;padding:15px;margin:10px 0;color:#ff6b6b;text-align:center;font-size:0.9em;">
+                    ${msg}
+                </div>`;
+            document.getElementById('detailCard').classList.add('show');
+        }
+
         async function processarArquivo(file) {
             if (!file) return;
             currentAttempt++;
@@ -786,30 +795,25 @@ Formato de saída:
                         return;
                     } catch (errGemini) {
                         console.warn('Gemini falhou:', errGemini);
-                        setOcrStatus('⚠️ Gemini falhou. Tentando OCR.space...');
+                        // Mostrar erro claro ao usuário — não tentar fallbacks que não funcionam
+                        document.getElementById('ocrLoading').classList.remove('show');
+                        const msg = errGemini.message || '';
+                        let dica = '❌ Gemini falhou. Tente novamente.';
+                        if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+                            dica = '❌ Quota Gemini esgotada. Gere uma nova chave em aistudio.google.com/apikey e configure no ⚙️';
+                        } else if (msg.includes('400') || msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')) {
+                            dica = '❌ Chave Gemini inválida ou expirada. Configure uma nova no ⚙️';
+                        } else if (msg.includes('404')) {
+                            dica = '❌ Modelo Gemini indisponível. Tente novamente.';
+                        }
+                        showErroGemini(dica);
+                        return;
                     }
                 } else {
-                    setOcrStatus('⚠️ Sem chave Gemini. Usando OCR.space...');
+                    document.getElementById('ocrLoading').classList.remove('show');
+                    showErroGemini('❌ Chave Gemini não configurada. Toque no ⚙️ para configurar.');
+                    return;
                 }
-
-                // 2º: OCR.space + parser
-                let texto = '';
-                try {
-                    texto = await ocrWithOcrSpace(file);
-                    setOcrStatus('✅ OCR concluído!');
-                } catch (errOcr) {
-                    setOcrStatus('⚠️ Usando Tesseract...');
-                    const processedImageData = await preprocessImage(file);
-                    texto = await ocrWithTesseract(processedImageData);
-                }
-
-                const jogos = extractJogos(texto);
-                const total = extractTotal(texto);
-
-                attempts.push({ id: currentAttempt, jogos, total });
-
-                document.getElementById('ocrLoading').classList.remove('show');
-                validateData(jogos, total);
 
             } catch (err) {
                 console.error('OCR erro:', err);
