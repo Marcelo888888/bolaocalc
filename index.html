@@ -532,7 +532,7 @@
 
         // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
         // Tenta modelos do mais recente ao mais estável
-        const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+        const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
         let geminiModelIdx = 0; // índice do modelo atual
 
         function getGeminiKey() {
@@ -600,10 +600,9 @@ Formato de saída:
                         { inline_data: { mime_type: mediaType, data: b64 } },
                         { text: prompt }
                     ]}],
-                    generationConfig: { 
-                        temperature: 0, 
-                        maxOutputTokens: 4096,
-                        responseMimeType: "application/json"
+                    generationConfig: {
+                        temperature: 0,
+                        maxOutputTokens: 4096
                     }
                 })
             });
