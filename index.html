@@ -486,8 +486,9 @@
         }
 
         // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
+        const _GK = 'AIzaSyAJsM9gqntIs0Ey9KMGhhIYMKxm5UAm3R8';
         function getGeminiKey() {
-            return localStorage.getItem('gemini_key') || '';
+            return localStorage.getItem('gemini_key') || _GK;
         }
 
         function abrirConfig() {
