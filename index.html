@@ -517,11 +517,51 @@
             });
         }
 
+        // Prepara imagem para Gemini: garante resolução mínima e contraste
+        async function prepararImagemParaGemini(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        // Garantir mínimo de 1800px no maior lado
+                        const minDim = 1800;
+                        if (Math.max(w, h) < minDim) {
+                            const fator = minDim / Math.max(w, h);
+                            w = Math.round(w * fator);
+                            h = Math.round(h * fator);
+                        }
+                        // Máximo 3000px para não sobrecarregar
+                        const maxDim = 3000;
+                        if (Math.max(w, h) > maxDim) {
+                            const fator = maxDim / Math.max(w, h);
+                            w = Math.round(w * fator);
+                            h = Math.round(h * fator);
+                        }
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        // Fundo branco (para imagens com transparência)
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, w, h);
+                        // Contraste leve para textos de impressora térmica
+                        ctx.filter = 'contrast(130%) brightness(105%)';
+                        ctx.drawImage(img, 0, 0, w, h);
+                        // Retornar base64 JPEG alta qualidade
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                        resolve({ b64: dataUrl.split(',')[1], mediaType: 'image/jpeg' });
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         async function ocrWithGemini(file) {
             const key = getGeminiKey();
             if (!key) throw new Error('Chave Gemini não configurada');
-            const b64 = await fileToBase64(file);
-            const mediaType = file.type || 'image/jpeg';
+            const { b64, mediaType } = await prepararImagemParaGemini(file);
             const prompt = `Analise este comprovante de bolão da Lotérica CAIXA.
 Retorne SOMENTE um JSON válido (sem markdown, sem explicação):
 {"jogos":[{"modalidade":"MEGA","qt":3,"vBolao":30.00,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
