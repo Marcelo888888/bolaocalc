@@ -271,6 +271,20 @@
         <div class="header">
             <h1>🎰 BolãoCalc</h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
+            <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
+        </div>
+
+        <!-- Modal de configuração -->
+        <div id="configModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999;align-items:center;justify-content:center;">
+            <div style="background:#1a1a2e;border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:25px;margin:20px;max-width:440px;width:100%;">
+                <h3 style="color:#00d4ff;margin-bottom:15px;">⚙️ Configurações</h3>
+                <p style="color:#8892b0;font-size:0.85em;margin-bottom:10px;">Chave Gemini API (Google AI Studio — gratuito):<br>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff;font-size:0.9em;">Obter chave gratuita →</a></p>
+                <input type="password" id="geminiKeyInput" placeholder="Cole sua chave aqui..."
+                    style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;margin-bottom:15px;">
+                <button onclick="salvarConfig()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#1a1a2e;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1em;">Salvar</button>
+                <button onclick="fecharConfig()" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);color:#8892b0;border:1px solid rgba(255,255,255,0.1);border-radius:12px;cursor:pointer;margin-top:8px;">Cancelar</button>
+            </div>
         </div>
 
         <div class="install-prompt" id="installPrompt">
@@ -471,14 +485,22 @@
             });
         }
 
-        // ===== CLAUDE VISION (motor principal — entende a imagem semanticamente) =====
-        function getClaudeKey() {
-            let key = sessionStorage.getItem('claude_key');
-            if (!key) {
-                key = prompt('🔑 Digite sua chave Anthropic (Claude API Key):\n(Será salva só nesta sessão)');
-                if (key) sessionStorage.setItem('claude_key', key.trim());
-            }
-            return key ? key.trim() : null;
+        // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
+        function getGeminiKey() {
+            return localStorage.getItem('gemini_key') || '';
+        }
+
+        function abrirConfig() {
+            document.getElementById('geminiKeyInput').value = getGeminiKey();
+            document.getElementById('configModal').style.display = 'flex';
+        }
+        function fecharConfig() {
+            document.getElementById('configModal').style.display = 'none';
+        }
+        function salvarConfig() {
+            const key = document.getElementById('geminiKeyInput').value.trim();
+            if (key) { localStorage.setItem('gemini_key', key); alert('✅ Chave salva!'); }
+            fecharConfig();
         }
 
         async function fileToBase64(file) {
@@ -490,59 +512,44 @@
             });
         }
 
-        async function ocrWithClaude(file) {
-            const CLAUDE_KEY = getClaudeKey();
-            if (!CLAUDE_KEY) throw new Error('Chave Claude não fornecida');
+        async function ocrWithGemini(file) {
+            const key = getGeminiKey();
+            if (!key) throw new Error('Chave Gemini não configurada');
             const b64 = await fileToBase64(file);
             const mediaType = file.type || 'image/jpeg';
-            const prompt = `Analise este comprovante de bolão da Lotérica CAIXA e extraia TODOS os jogos em formato JSON.
-
-Retorne APENAS um objeto JSON válido, sem texto adicional, neste formato:
-{
-  "jogos": [
-    {"modalidade": "MEGA", "qt": 3, "vBolao": 30.00, "vTarifa": 10.50},
-    {"modalidade": "QUINA", "qt": 5, "vBolao": 63.00, "vTarifa": 22.04},
-    {"modalidade": "LOTOFÁCIL", "qt": 2, "vBolao": 17.50, "vTarifa": 6.12}
-  ],
-  "totalBolao": 594.00,
-  "totalTarifa": 207.85
-}
-
+            const prompt = `Analise este comprovante de bolão da Lotérica CAIXA.
+Retorne SOMENTE um JSON válido (sem markdown, sem explicação):
+{"jogos":[{"modalidade":"MEGA","qt":3,"vBolao":30.00,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
 Regras:
-- MOD-CONC (ex: MEGA-2995) → use só a modalidade (MEGA, QUINA, LOTOFÁCIL, LOTOMANIA, TIMEMANIA)
-- C.T/C.V (ex: 3/0) → o número antes do / é a quantidade de cotas (qt)
-- V.BOLAO = valor do bolão
-- V.TARIFA = valor da tarifa de serviço
-- Se houver seção "SEM TARIFA DE SERVIÇO", inclua esses jogos com vTarifa: 0
-- Use ponto como separador decimal no JSON (ex: 17,50 → 17.50)
-- Inclua TODOS os jogos, mesmo repetidos`;
+- Coluna MOD-CONC: use só MEGA, QUINA, LOTOFÁCIL, LOTOMANIA, TIMEMANIA, DUPLA SENA
+- Coluna C.T/C.V ex 3/0: o número antes do / = qt (cotas)
+- Coluna V.BOLAO = vBolao
+- Coluna V.TARIFA = vTarifa
+- Seção SEM TARIFA: vTarifa=0
+- Inclua TODOS os jogos (repetições também)
+- Use ponto decimal no JSON`;
 
-            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+            const resp = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': CLAUDE_KEY,
-                    'anthropic-version': '2023-06-01'
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    model: 'claude-haiku-4-5',
-                    max_tokens: 2048,
-                    messages: [{ role: 'user', content: [
-                        { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-                        { type: 'text', text: prompt }
-                    ]}]
+                    contents: [{ parts: [
+                        { inline_data: { mime_type: mediaType, data: b64 } },
+                        { text: prompt }
+                    ]}],
+                    generationConfig: { temperature: 0, maxOutputTokens: 2048 }
                 })
             });
-            if (!resp.ok) throw new Error('Claude API erro: ' + resp.status);
+            if (!resp.ok) throw new Error('Gemini erro: ' + resp.status);
             const json = await resp.json();
-            const texto = json.content?.[0]?.text || '';
-            // Extrair JSON da resposta
+            const texto = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const match = texto.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error('Claude não retornou JSON válido');
+            if (!match) throw new Error('Gemini não retornou JSON');
             return JSON.parse(match[0]);
         }
 
-        // ===== OCR.SPACE FALLBACK (retorna texto bruto) =====
+        // ===== OCR.SPACE FALLBACK =====
         async function ocrWithOcrSpace(file) {
             const formData = new FormData();
             formData.append('file', file);
@@ -550,6 +557,7 @@ Regras:
             formData.append('isOverlayRequired', 'false');
             formData.append('detectOrientation', 'true');
             formData.append('scale', 'true');
+            formData.append('isTable', 'true');
             formData.append('OCREngine', '2');
             const resp = await fetch('https://api.ocr.space/parse/image', {
                 method: 'POST',
@@ -563,9 +571,7 @@ Regras:
 
         // ===== TESSERACT FALLBACK =====
         async function ocrWithTesseract(processedDataUrl) {
-            const result = await Tesseract.recognize(processedDataUrl, 'por', {
-                tessedit_pageseg_mode: '6'
-            });
+            const result = await Tesseract.recognize(processedDataUrl, 'por', { tessedit_pageseg_mode: '6' });
             return result.data.text;
         }
 
@@ -581,43 +587,41 @@ Regras:
 
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
-            setOcrStatus('🤖 Analisando com IA (Claude Vision)...');
+            setOcrStatus('🤖 Analisando com Gemini Vision...');
 
             try {
-                let jogos = [], totalComprovante = 0;
-
-                // 1º: Claude Vision (entende a imagem diretamente)
-                try {
-                    const resultado = await ocrWithClaude(file);
-                    jogos = (resultado.jogos || []).map(j => ({
-                        modalidade: j.modalidade,
-                        qt: Number(j.qt),
-                        vBolao: Number(j.vBolao),
-                        vTarifa: Number(j.vTarifa || 0),
-                        cota: Math.round(((Number(j.vBolao) + Number(j.vTarifa || 0)) / Number(j.qt)) * 100) / 100
-                    }));
-                    totalComprovante = Number(resultado.totalBolao || 0) + Number(resultado.totalTarifa || 0);
-                    setOcrStatus('✅ Claude Vision concluído!');
-
-                    // Mostrar texto resumido no preview
-                    document.getElementById('textPreview').textContent =
-                        jogos.map(j => `${j.modalidade} ${j.qt}x | Bolão: R$${j.vBolao.toFixed(2)} | Tarifa: R$${j.vTarifa.toFixed(2)} | Cota: R$${j.cota.toFixed(2)}`).join('\n');
-                    document.getElementById('textPreview').classList.add('show');
-
-                    document.getElementById('ocrLoading').classList.remove('show');
-                    validateData(jogos, totalComprovante);
-                    return; // Sucesso — sair aqui
-
-                } catch (errClaude) {
-                    console.warn('Claude falhou, tentando OCR.space:', errClaude);
-                    setOcrStatus('⚠️ Tentando OCR.space...');
+                // 1º: Gemini Vision (tem CORS, gratuito)
+                if (getGeminiKey()) {
+                    try {
+                        const resultado = await ocrWithGemini(file);
+                        const jogos = (resultado.jogos || []).map(j => ({
+                            modalidade: j.modalidade,
+                            qt: Number(j.qt),
+                            vBolao: Number(j.vBolao),
+                            vTarifa: Number(j.vTarifa || 0),
+                            cota: Math.round(((Number(j.vBolao) + Number(j.vTarifa || 0)) / Number(j.qt)) * 100) / 100
+                        }));
+                        const totalComprovante = Number(resultado.totalBolao || 0) + Number(resultado.totalTarifa || 0);
+                        setOcrStatus('✅ Gemini concluído!');
+                        document.getElementById('textPreview').textContent =
+                            jogos.map(j => `${j.modalidade} ${j.qt}x | R$${j.vBolao.toFixed(2)} + R$${j.vTarifa.toFixed(2)} = R$${j.cota.toFixed(2)}/cota`).join('\n');
+                        document.getElementById('textPreview').classList.add('show');
+                        document.getElementById('ocrLoading').classList.remove('show');
+                        validateData(jogos, totalComprovante);
+                        return;
+                    } catch (errGemini) {
+                        console.warn('Gemini falhou:', errGemini);
+                        setOcrStatus('⚠️ Gemini falhou. Tentando OCR.space...');
+                    }
+                } else {
+                    setOcrStatus('⚠️ Sem chave Gemini. Usando OCR.space...');
                 }
 
                 // 2º: OCR.space + parser
                 let texto = '';
                 try {
                     texto = await ocrWithOcrSpace(file);
-                    setOcrStatus('✅ OCR.space concluído!');
+                    setOcrStatus('✅ OCR concluído!');
                 } catch (errOcr) {
                     setOcrStatus('⚠️ Usando Tesseract...');
                     const processedImageData = await preprocessImage(file);
