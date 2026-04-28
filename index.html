@@ -561,48 +561,34 @@
             });
         }
 
-        // Prompt principal — detalhado com layout do comprovante CAIXA
-        const GEMINI_PROMPT_PRIMARY = `Você é um especialista em leitura de comprovantes de BOLÃO da Lotérica CAIXA.
-IMPORTANTE: Ignore completamente anotações manuscritas em caneta azul ou vermelha sobre o comprovante. Leia APENAS o texto impresso pela máquina.
+        // Prompt principal
+        const GEMINI_PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Extraia os dados dos jogos e retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
 
-## LAYOUT DO COMPROVANTE CAIXA
-O comprovante tem formato de cupom térmico com estas seções:
+Comprovante tem duas seções:
+1. "COM TARIFA DE SERVIÇO": colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
+   - MOD-CONC ex "MEGA-2995": extraia modalidade="MEGA" e concurso="2995"
+   - C.T/C.V ex "3/0": qt = número ANTES da barra (3)
+   - pctTar = coluna %TAR (geralmente 35)
+   - vTarifa = V.TARIFA impresso; se ilegível, calcule vBolao * pctTar / 100
+2. "SEM TARIFA DE SERVIÇO": colunas MODALIDADE | QTDADE | VLR.BOLAO → vTarifa=0, pctTar=0
 
-1. **CABEÇALHO**: "BOLAO CAIXA", data, operador, terminal
-2. **TABELA DE JOGOS COM TARIFA**: Colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
-   - MOD-CONC = modalidade + número do concurso (ex: "MEGA-2995", "LFACIL-3659", "QUINA-6999")
-   - Extraia SEPARADAMENTE a modalidade curta e o número do concurso
-   - C.T/C.V = cotas totais / cotas vendidas (ex: 3/0). Use o número ANTES da barra como "qt"
-   - V.BOLAO = valor do bolão
-   - %TAR = percentual da tarifa (geralmente 35)
-   - V.TARIFA = valor da tarifa. REGRA: V.TARIFA = V.BOLAO × (%TAR / 100)
-3. **SEÇÃO "SEM TARIFA"**: Jogos sem tarifa. Colunas: MODALIDADE | QTDADE | VLR.BOLAO
-4. **TOTAIS**: TOTAL V.BOLAO e TOTAL V.TARIFA ao final
+Regras:
+- Extraia CADA LINHA separadamente. Linhas repetidas são jogos distintos.
+- Use o TOTAL impresso no comprovante para totalBolao e totalTarifa (seção COM TARIFA)
+- Valores com ponto decimal: 17.50 (não vírgula)
 
-## REGRAS
-1. Extraia CADA LINHA de jogo separadamente. NÃO agrupe linhas repetidas!
-2. Se a mesma modalidade aparece 2x, são 2 jogos distintos.
-3. Para C.T/C.V como "3/0": qt = 3 (número antes da barra)
-4. Jogos na seção "SEM TARIFA" têm vTarifa = 0 e pctTar = 0
-5. Os totais (totalBolao e totalTarifa) devem vir da linha TOTAL do comprovante
-6. Valores financeiros com ponto decimal (ex: 17.50, não 17,50)
-7. Se não conseguir ler V.TARIFA com certeza, calcule como V.BOLAO × pctTar / 100
-
-## FORMATO DE SAÍDA (JSON puro, sem markdown)
+Formato de saída:
 {"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
 
         // Prompt simplificado para retry
-        const GEMINI_PROMPT_RETRY = `Leia este comprovante de BOLÃO da lotérica CAIXA. Ignore anotações manuscritas em caneta.
-Retorne JSON puro:
-{"jogos":[{"modalidade":"NOME_CURTO","concurso":"NUMERO","qt":COTAS,"vBolao":VALOR,"pctTar":PERCENTUAL,"vTarifa":VALOR_OU_ZERO}],"totalBolao":SOMA,"totalTarifa":SOMA}
+        const GEMINI_PROMPT_RETRY = `Leia o comprovante de BOLÃO da CAIXA e retorne JSON puro:
+{"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
 
-Regras:
-- MOD-CONC ex: "MEGA-2995" → modalidade="MEGA", concurso="2995"
-- qt = número ANTES da barra em C.T/C.V (ex: 3/0 → qt=3)
-- Jogos "SEM TARIFA" têm vTarifa: 0 e pctTar: 0
-- Cada linha é um jogo separado
-- Valores com ponto decimal (17.50)
-- Se V.TARIFA ilegível, calcule: vBolao * pctTar / 100`;
+- MOD-CONC "MEGA-2995" → modalidade="MEGA", concurso="2995"
+- C.T/C.V "3/0" → qt=3 (antes da barra)
+- Cada linha = 1 jogo. Não agrupe.
+- SEM TARIFA: vTarifa=0, pctTar=0
+- Se V.TARIFA ilegível: vBolao * pctTar / 100`;
 
         async function _callGemini(b64, mediaType, prompt, key, model) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
@@ -764,10 +750,7 @@ Regras:
                 // 1º: Gemini Vision (tem CORS, gratuito)
                 if (getGeminiKey()) {
                     try {
-                        // Remove anotações de caneta antes de enviar ao Gemini
-                        setOcrStatus('🧹 Removendo anotações de caneta...');
-                        const cleanedFile = await removePenMarks(file);
-                        const resultado = await ocrWithGemini(cleanedFile);
+                        const resultado = await ocrWithGemini(file);
                         const jogos = (resultado.jogos || []).map(j => {
                             const vBolao = Number(j.vBolao);
                             const pctTar = Number(j.pctTar || 0);
