@@ -328,30 +328,19 @@
             <p style="color:#8892b0;font-size:0.85em;margin-top:10px;">Isso pode levar alguns segundos</p>
         </div>
 
-        <div class="validation-card" id="validationCard">
-            <div class="validation-title checking" id="validationTitle">🧮 Validando dados...</div>
-            <div class="validation-details" id="validationDetails"></div>
-            <div class="validation-message" id="validationMessage"></div>
-            <button class="btn-confirm" id="btnConfirm" onclick="showDetails()" disabled>
-                ✅ Ver Detalhes dos Jogos
-            </button>
-            <button class="btn-retake" id="btnRetake" onclick="retakePhoto()">
-                📸 Tentar Outra Foto
-            </button>
-        </div>
-
         <div class="detail-card" id="detailCard">
-            <div class="detail-title">📋 Detalhes dos Jogos</div>
+            <div class="detail-title">📋 Detalhes (Linha a Linha)</div>
+            <div class="validation-details" id="validationDetails" style="margin-bottom:15px; background:rgba(10,25,47,0.7); padding:10px; border-radius:10px;"></div>
             <table class="detail-table">
                 <thead>
                     <tr>
-                        <th>#</th><th>Modalidade</th><th>Qt</th><th>V.Bolão</th><th>V.Tarifa</th><th>Cota</th>
+                        <th>#</th><th>MOD-CONC</th><th>Qt</th><th>V.Bolão</th><th>V.Tarifa</th><th>Cota</th>
                     </tr>
                 </thead>
                 <tbody id="detailCorpo"></tbody>
             </table>
             <button class="btn-confirm" onclick="showResult()">
-                📊 Ver Tabela Agrupada por Cota
+                📊 Ver Resumo dos Jogos
             </button>
             <button class="btn-retake" onclick="retakePhoto()">
                 📸 Tirar Outra Foto
@@ -379,7 +368,7 @@
         <div class="text-preview" id="textPreview"></div>
 
         <div class="result-card" id="resultCard">
-            <div class="result-title">📊 Tabela Agrupada por Cota</div>
+            <div class="result-title">📊 Resumo dos Jogos</div>
             <div class="summary-grid">
                 <div class="summary-item">
                     <div class="valor" id="totalCotas">0</div>
@@ -438,6 +427,58 @@
         }
 
         // ===== IMAGE PRE-PROCESSING AVANÇADO =====
+
+        // Remove anotações de caneta azul/vermelha da imagem
+        // Retorna um novo File limpo para enviar ao Gemini
+        async function removePenMarks(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.getElementById('processCanvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i], g = data[i+1], b = data[i+2];
+                            // Converter para HSL simplificado
+                            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                            const l = (max + min) / 2;
+                            const d = max - min;
+                            if (d > 30 && l < 200) { // pixel colorido (não branco/cinza)
+                                let h = 0;
+                                if (max === r) h = ((g - b) / d + 6) % 6;
+                                else if (max === g) h = (b - r) / d + 2;
+                                else h = (r - g) / d + 4;
+                                h *= 60;
+                                const s = d / (255 - Math.abs(2 * l - 255));
+                                // Azul: hue 180-270, saturação >0.2
+                                // Vermelho: hue 0-30 ou 330-360, saturação >0.2
+                                const isBlue = h >= 180 && h <= 270 && s > 0.2;
+                                const isRed = (h <= 30 || h >= 330) && s > 0.25 && r > 100;
+                                if (isBlue || isRed) {
+                                    // Substituir por branco
+                                    data[i] = data[i+1] = data[i+2] = 255;
+                                }
+                            }
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                        canvas.toBlob((blob) => {
+                            resolve(new File([blob], 'cleaned.jpg', { type: 'image/jpeg' }));
+                        }, 'image/jpeg', 0.95);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         async function preprocessImage(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -490,6 +531,10 @@
         }
 
         // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
+        // Tenta modelos do mais recente ao mais estável
+        const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+        let geminiModelIdx = 0; // índice do modelo atual
+
         function getGeminiKey() {
             return localStorage.getItem('gemini_key') || '';
         }
@@ -516,38 +561,51 @@
             });
         }
 
-        // Prepara imagem para Gemini: envia o raw em base64 (o Gemini lida perfeitamente com a imagem natural, manipular no canvas degrada a leitura)
-        async function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result.split(',')[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
+        // Prompt principal — detalhado com layout do comprovante CAIXA
+        const GEMINI_PROMPT_PRIMARY = `Você é um especialista em leitura de comprovantes de BOLÃO da Lotérica CAIXA.
+IMPORTANTE: Ignore completamente anotações manuscritas em caneta azul ou vermelha sobre o comprovante. Leia APENAS o texto impresso pela máquina.
 
-        async function ocrWithGemini(file) {
-            const key = getGeminiKey();
-            if (!key) throw new Error('Chave Gemini não configurada');
-            const b64 = await fileToBase64(file);
-            const mediaType = file.type || 'image/jpeg';
-            
-            const prompt = `Você é um leitor de dados de comprovantes da Lotérica CAIXA. Sua tarefa é extrair TODOS os jogos com precisão perfeita.
-Retorne SOMENTE um JSON válido, e NADA MAIS. NENHUM texto antes, nem depois, nem blocos markdown.
+## LAYOUT DO COMPROVANTE CAIXA
+O comprovante tem formato de cupom térmico com estas seções:
 
-Exemplo exato de saída desejada:
-{"jogos":[{"modalidade":"MEGA","qt":3,"vBolao":30.00,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
+1. **CABEÇALHO**: "BOLAO CAIXA", data, operador, terminal
+2. **TABELA DE JOGOS COM TARIFA**: Colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
+   - MOD-CONC = modalidade + número do concurso (ex: "MEGA-2995", "LFACIL-3659", "QUINA-6999")
+   - Extraia SEPARADAMENTE a modalidade curta e o número do concurso
+   - C.T/C.V = cotas totais / cotas vendidas (ex: 3/0). Use o número ANTES da barra como "qt"
+   - V.BOLAO = valor do bolão
+   - %TAR = percentual da tarifa (geralmente 35)
+   - V.TARIFA = valor da tarifa. REGRA: V.TARIFA = V.BOLAO × (%TAR / 100)
+3. **SEÇÃO "SEM TARIFA"**: Jogos sem tarifa. Colunas: MODALIDADE | QTDADE | VLR.BOLAO
+4. **TOTAIS**: TOTAL V.BOLAO e TOTAL V.TARIFA ao final
+
+## REGRAS
+1. Extraia CADA LINHA de jogo separadamente. NÃO agrupe linhas repetidas!
+2. Se a mesma modalidade aparece 2x, são 2 jogos distintos.
+3. Para C.T/C.V como "3/0": qt = 3 (número antes da barra)
+4. Jogos na seção "SEM TARIFA" têm vTarifa = 0 e pctTar = 0
+5. Os totais (totalBolao e totalTarifa) devem vir da linha TOTAL do comprovante
+6. Valores financeiros com ponto decimal (ex: 17.50, não 17,50)
+7. Se não conseguir ler V.TARIFA com certeza, calcule como V.BOLAO × pctTar / 100
+
+## FORMATO DE SAÍDA (JSON puro, sem markdown)
+{"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
+
+        // Prompt simplificado para retry
+        const GEMINI_PROMPT_RETRY = `Leia este comprovante de BOLÃO da lotérica CAIXA. Ignore anotações manuscritas em caneta.
+Retorne JSON puro:
+{"jogos":[{"modalidade":"NOME_CURTO","concurso":"NUMERO","qt":COTAS,"vBolao":VALOR,"pctTar":PERCENTUAL,"vTarifa":VALOR_OU_ZERO}],"totalBolao":SOMA,"totalTarifa":SOMA}
 
 Regras:
-1. Extraia CADA LINHA de jogo. Não pule nem agrupe linhas repetidas!
-2. MOD-CONC: Extraia apenas o nome do jogo (MEGA, QUINA, LOTOFÁCIL, LOTOMANIA, TIMEMANIA, DUPLA SENA, DIA DE SORTE).
-3. C.T/C.V (ex: 3/0, 2/0): O número ANTES da barra (3) é a quantidade de cotas (qt).
-4. V.BOLAO = vBolao. V.TARIFA = vTarifa.
-5. Se houver uma seção "SEM TARIFA", extraia esses jogos com vTarifa: 0.
-6. Calcule o totalBolao e totalTarifa baseado no texto final do comprovante ou somando as colunas.
-7. Todos os valores financeiros devem usar ponto decimal (ex: 17.50).`;
+- MOD-CONC ex: "MEGA-2995" → modalidade="MEGA", concurso="2995"
+- qt = número ANTES da barra em C.T/C.V (ex: 3/0 → qt=3)
+- Jogos "SEM TARIFA" têm vTarifa: 0 e pctTar: 0
+- Cada linha é um jogo separado
+- Valores com ponto decimal (17.50)
+- Se V.TARIFA ilegível, calcule: vBolao * pctTar / 100`;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+        async function _callGemini(b64, mediaType, prompt, key, model) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
             const resp = await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -558,22 +616,110 @@ Regras:
                     ]}],
                     generationConfig: { 
                         temperature: 0, 
-                        maxOutputTokens: 2048,
+                        maxOutputTokens: 4096,
                         responseMimeType: "application/json"
                     }
                 })
             });
-            if (!resp.ok) throw new Error('Gemini erro HTTP: ' + resp.status);
+            if (!resp.ok) {
+                const errBody = await resp.text().catch(() => '');
+                throw new Error(`Gemini HTTP ${resp.status}: ${errBody.substring(0, 100)}`);
+            }
             const json = await resp.json();
             let texto = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
             try {
                 return JSON.parse(texto);
             } catch (e) {
-                // Tenta extrair caso o Gemini ignore o MIME type e mande markdown
                 const match = texto.match(/\{[\s\S]*\}/);
                 if (match) return JSON.parse(match[0]);
-                throw new Error('Gemini não retornou JSON. Resposta: ' + texto.substring(0, 50));
+                throw new Error('JSON inválido: ' + texto.substring(0, 80));
             }
+        }
+
+        function _validateGeminiResult(result) {
+            // Validação básica do resultado
+            if (!result || !Array.isArray(result.jogos)) return { valid: false, reason: 'sem jogos' };
+            if (result.jogos.length === 0) return { valid: false, reason: 'array vazio' };
+            for (const j of result.jogos) {
+                if (!j.modalidade || !j.qt || j.qt <= 0) return { valid: false, reason: 'jogo inválido' };
+                if (typeof j.vBolao !== 'number' || j.vBolao <= 0) return { valid: false, reason: 'vBolao inválido' };
+            }
+            // Verifica consistência interna: soma dos jogos vs totais declarados
+            const somaBolao = result.jogos.reduce((s, j) => s + j.vBolao, 0);
+            const somaTarifa = result.jogos.reduce((s, j) => s + (j.vTarifa || 0), 0);
+            const diffBolao = Math.abs(somaBolao - (result.totalBolao || 0));
+            const diffTarifa = Math.abs(somaTarifa - (result.totalTarifa || 0));
+            const totalDeclarado = (result.totalBolao || 0) + (result.totalTarifa || 0);
+            const totalSoma = somaBolao + somaTarifa;
+            const pctDiff = totalDeclarado > 0 ? (Math.abs(totalSoma - totalDeclarado) / totalDeclarado) * 100 : 0;
+            return {
+                valid: true,
+                pctDiff,
+                somaBolao: Math.round(somaBolao * 100) / 100,
+                somaTarifa: Math.round(somaTarifa * 100) / 100,
+                consistent: pctDiff <= 5
+            };
+        }
+
+        async function ocrWithGemini(file) {
+            const key = getGeminiKey();
+            if (!key) throw new Error('Chave Gemini não configurada');
+            const b64 = await fileToBase64(file);
+            const mediaType = file.type || 'image/jpeg';
+
+            let bestResult = null;
+            let bestCheck = { valid: false, pctDiff: Infinity };
+
+            // Tenta cada modelo disponível
+            for (let mi = 0; mi < GEMINI_MODELS.length; mi++) {
+                const model = GEMINI_MODELS[mi];
+
+                // 1ª tentativa: prompt detalhado
+                try {
+                    setOcrStatus(`🤖 ${model} — analisando...`);
+                    console.log(`Tentando modelo: ${model} (prompt detalhado)`);
+                    const result = await _callGemini(b64, mediaType, GEMINI_PROMPT_PRIMARY, key, model);
+                    const check = _validateGeminiResult(result);
+                    if (check.valid && check.consistent) {
+                        console.log(`✅ ${model} OK, diff=${check.pctDiff.toFixed(1)}%`);
+                        return result;
+                    }
+                    if (check.valid && check.pctDiff < bestCheck.pctDiff) {
+                        bestResult = result;
+                        bestCheck = check;
+                        console.warn(`⚠️ ${model} inconsistente (${check.pctDiff.toFixed(1)}%), guardando como melhor até agora`);
+                    }
+                } catch (err1) {
+                    console.warn(`${model} prompt detalhado falhou:`, err1.message);
+                    // Se o modelo não existe (404), tenta o próximo modelo
+                    if (err1.message.includes('404')) continue;
+                }
+
+                // 2ª tentativa com mesmo modelo: prompt simplificado
+                try {
+                    setOcrStatus(`🔄 ${model} — tentativa alternativa...`);
+                    console.log(`Tentando modelo: ${model} (prompt simplificado)`);
+                    const result2 = await _callGemini(b64, mediaType, GEMINI_PROMPT_RETRY, key, model);
+                    const check2 = _validateGeminiResult(result2);
+                    if (check2.valid && check2.consistent) {
+                        console.log(`✅ ${model} retry OK, diff=${check2.pctDiff.toFixed(1)}%`);
+                        return result2;
+                    }
+                    if (check2.valid && check2.pctDiff < bestCheck.pctDiff) {
+                        bestResult = result2;
+                        bestCheck = check2;
+                    }
+                } catch (err2) {
+                    console.warn(`${model} retry falhou:`, err2.message);
+                }
+            }
+
+            // Retorna o melhor resultado encontrado
+            if (bestResult && bestCheck.valid) {
+                console.log(`📋 Usando melhor resultado disponível, diff=${bestCheck.pctDiff.toFixed(1)}%`);
+                return bestResult;
+            }
+            throw new Error('Nenhum modelo Gemini conseguiu extrair dados válidos');
         }
 
 
@@ -612,25 +758,47 @@ Regras:
             updateAttemptsUI();
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
-            setOcrStatus('🤖 Analisando com Gemini Vision...');
+            setOcrStatus('🤖 Analisando com Gemini...');
 
             try {
                 // 1º: Gemini Vision (tem CORS, gratuito)
                 if (getGeminiKey()) {
                     try {
-                        const resultado = await ocrWithGemini(file);
-                        const jogos = (resultado.jogos || []).map(j => ({
-                            modalidade: j.modalidade,
-                            qt: Number(j.qt),
-                            vBolao: Number(j.vBolao),
-                            vTarifa: Number(j.vTarifa || 0),
-                            cota: Math.round(((Number(j.vBolao) + Number(j.vTarifa || 0)) / Number(j.qt)) * 100) / 100
-                        }));
+                        // Remove anotações de caneta antes de enviar ao Gemini
+                        setOcrStatus('🧹 Removendo anotações de caneta...');
+                        const cleanedFile = await removePenMarks(file);
+                        const resultado = await ocrWithGemini(cleanedFile);
+                        const jogos = (resultado.jogos || []).map(j => {
+                            const vBolao = Number(j.vBolao);
+                            const pctTar = Number(j.pctTar || 0);
+                            let vTarifa = Number(j.vTarifa || 0);
+                            let tarifaEstimada = false;
+                            // Se tarifa veio 0 mas tem %TAR, estimar
+                            if (vTarifa === 0 && pctTar > 0 && vBolao > 0) {
+                                vTarifa = Math.round(vBolao * pctTar / 100 * 100) / 100;
+                                tarifaEstimada = true;
+                            }
+                            // Verificar se tarifa bate com cálculo
+                            if (pctTar > 0 && vTarifa > 0) {
+                                const tarifaCalc = Math.round(vBolao * pctTar / 100 * 100) / 100;
+                                if (Math.abs(vTarifa - tarifaCalc) > 0.02) {
+                                    // Tarifa lida difere do cálculo — usar a calculada
+                                    console.warn(`Tarifa corrigida: lido=${vTarifa} calc=${tarifaCalc} (${vBolao}×${pctTar}%)`);
+                                    vTarifa = tarifaCalc;
+                                    tarifaEstimada = true;
+                                }
+                            }
+                            const qt = Number(j.qt);
+                            const cota = qt > 0 ? Math.round(((vBolao + vTarifa) / qt) * 100) / 100 : 0;
+                            return {
+                                modalidade: j.modalidade || 'BOLÃO',
+                                concurso: j.concurso || '',
+                                qt, vBolao, vTarifa, pctTar, cota,
+                                tarifaEstimada
+                            };
+                        });
                         const totalComprovante = Number(resultado.totalBolao || 0) + Number(resultado.totalTarifa || 0);
                         setOcrStatus('✅ Gemini concluído!');
-                        document.getElementById('textPreview').textContent =
-                            jogos.map(j => `${j.modalidade} ${j.qt}x | R$${j.vBolao.toFixed(2)} + R$${j.vTarifa.toFixed(2)} = R$${j.cota.toFixed(2)}/cota`).join('\n');
-                        document.getElementById('textPreview').classList.add('show');
                         document.getElementById('ocrLoading').classList.remove('show');
                         validateData(jogos, totalComprovante);
                         return;
@@ -652,9 +820,6 @@ Regras:
                     const processedImageData = await preprocessImage(file);
                     texto = await ocrWithTesseract(processedImageData);
                 }
-
-                document.getElementById('textPreview').textContent = texto;
-                document.getElementById('textPreview').classList.add('show');
 
                 const jogos = extractJogos(texto);
                 const total = extractTotal(texto);
@@ -720,58 +885,37 @@ Regras:
                 </div>
             `;
 
-            const title = document.getElementById('validationTitle');
-            const message = document.getElementById('validationMessage');
-            const btnConfirm = document.getElementById('btnConfirm');
-            const btnRetake = document.getElementById('btnRetake');
-
+            // Vai direto para a tela de detalhes
             if (jogos.length === 0) {
-                title.className = 'validation-title error';
-                title.textContent = '❌ Nenhum jogo encontrado';
-                message.className = 'validation-message error';
-                message.innerHTML = '<strong>Não conseguimos ler os dados.</strong><br>Tire outra foto com mais luz e foco.';
-                btnConfirm.disabled = true;
-                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
-            } else if (diffPercent <= 10) {
-                title.className = 'validation-title success';
-                title.textContent = '✅ Dados validados!';
-                message.className = 'validation-message success';
-                message.innerHTML = '<strong>As contas batem!</strong><br>O OCR leu ' + jogos.length + ' jogos corretamente.';
-                btnConfirm.disabled = false;
-                btnRetake.style.display = 'none';
-            } else if (diffPercent <= 25) {
-                title.className = 'validation-title checking';
-                title.textContent = '⚠️ Pequena divergência';
-                message.className = 'validation-message success';
-                message.innerHTML = '<strong>Diferença de ' + diffPercent.toFixed(1) + '%.</strong><br>Verifique os valores antes de prosseguir.';
-                btnConfirm.disabled = false;
-                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
-            } else {
-                title.className = 'validation-title error';
-                title.textContent = '❌ Dados não conferem!';
-                message.className = 'validation-message error';
-                message.innerHTML = '<strong>Diferença muito grande (' + diffPercent.toFixed(1) + '%).</strong><br>O OCR errou a leitura. ' + (currentAttempt < maxAttempts ? 'Tente outra foto!' : 'Corrija manualmente.');
-                btnConfirm.disabled = true;
-                btnRetake.textContent = currentAttempt < maxAttempts ? '📸 Tentar Outra Foto' : '✏️ Corrigir Manualmente';
+                document.getElementById('validationDetails').innerHTML += `
+                    <div style="color:#ff6b6b;text-align:center;margin-top:10px;">
+                        <strong>⚠️ Nenhum jogo foi encontrado.</strong><br>
+                        A foto estava ruim ou o OCR falhou.
+                    </div>`;
             }
+
+            // Vai direto para a tela de detalhes
+            showDetails();
         }
 
         // ===== SHOW DETAILS =====
         function showDetails() {
-            document.getElementById('validationCard').classList.remove('show');
             document.getElementById('detailCard').classList.add('show');
 
             const tbody = document.getElementById('detailCorpo');
-            tbody.innerHTML = currentJogos.map((jogo, i) => `
+            tbody.innerHTML = currentJogos.map((jogo, i) => {
+                const modConc = jogo.concurso ? `${jogo.modalidade}-${jogo.concurso}` : jogo.modalidade;
+                const tarifaStr = `R$ ${jogo.vTarifa.toFixed(2).replace('.', ',')}${jogo.tarifaEstimada ? '*' : ''}`;
+                return `
                 <tr>
                     <td>${i + 1}</td>
-                    <td>${jogo.modalidade}</td>
+                    <td style="font-size:0.75em;white-space:nowrap;">${modConc}</td>
                     <td>${jogo.qt}</td>
                     <td>R$ ${jogo.vBolao.toFixed(2).replace('.', ',')}</td>
-                    <td>R$ ${jogo.vTarifa.toFixed(2).replace('.', ',')}</td>
+                    <td${jogo.tarifaEstimada ? ' style="color:#ffc107;"' : ''}>${tarifaStr}</td>
                     <td>R$ ${jogo.cota.toFixed(2).replace('.', ',')}</td>
-                </tr>
-            `).join('') + `
+                </tr>`;
+            }).join('') + `
                 <tr style="font-weight:bold; background:rgba(0,212,255,0.1);">
                     <td colspan="2">TOTAIS</td>
                     <td>${currentJogos.reduce((s, j) => s + j.qt, 0)}</td>
@@ -779,6 +923,7 @@ Regras:
                     <td>R$ ${currentJogos.reduce((s, j) => s + j.vTarifa, 0).toFixed(2).replace('.', ',')}</td>
                     <td>-</td>
                 </tr>
+                ${currentJogos.some(j => j.tarifaEstimada) ? '<tr><td colspan="6" style="text-align:center;color:#ffc107;font-size:0.75em;padding:8px;">* Tarifa estimada (V.Bolão × %TAR)</td></tr>' : ''}
             `;
         }
 
@@ -906,11 +1051,9 @@ Regras:
         // ===== RETAKE / RESET =====
         function retakePhoto() {
             if (currentAttempt >= maxAttempts) {
-                document.getElementById('validationCard').classList.remove('show');
                 document.getElementById('detailCard').classList.remove('show');
                 showManualEdit();
             } else {
-                document.getElementById('validationCard').classList.remove('show');
                 document.getElementById('detailCard').classList.remove('show');
                 document.getElementById('cameraSection').style.display = 'block';
                 fileInput.value = '';
@@ -930,7 +1073,6 @@ Regras:
             document.getElementById('dot1').classList.add('active');
 
             document.getElementById('cameraSection').style.display = 'block';
-            document.getElementById('validationCard').classList.remove('show');
             document.getElementById('detailCard').classList.remove('show');
             document.getElementById('manualCard').classList.remove('show');
             document.getElementById('resultCard').classList.remove('show');
@@ -941,7 +1083,6 @@ Regras:
 
         function handleFailedAttempt() {
             if (currentAttempt >= maxAttempts) {
-                document.getElementById('validationCard').classList.remove('show');
                 showManualEdit();
             } else {
                 document.getElementById('cameraSection').style.display = 'block';
