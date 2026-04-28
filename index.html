@@ -490,9 +490,8 @@
         }
 
         // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
-        const _GK = 'AIzaSyAJsM9gqntIs0Ey9KMGhhIYMKxm5UAm3R8';
         function getGeminiKey() {
-            return localStorage.getItem('gemini_key') || _GK;
+            return localStorage.getItem('gemini_key') || '';
         }
 
         function abrirConfig() {
@@ -557,15 +556,24 @@ Regras:
                         { inline_data: { mime_type: mediaType, data: b64 } },
                         { text: prompt }
                     ]}],
-                    generationConfig: { temperature: 0, maxOutputTokens: 2048 }
+                    generationConfig: { 
+                        temperature: 0, 
+                        maxOutputTokens: 2048,
+                        responseMimeType: "application/json"
+                    }
                 })
             });
-            if (!resp.ok) throw new Error('Gemini erro: ' + resp.status);
+            if (!resp.ok) throw new Error('Gemini erro HTTP: ' + resp.status);
             const json = await resp.json();
-            const texto = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const match = texto.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error('Gemini não retornou JSON');
-            return JSON.parse(match[0]);
+            let texto = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            try {
+                return JSON.parse(texto);
+            } catch (e) {
+                // Tenta extrair caso o Gemini ignore o MIME type e mande markdown
+                const match = texto.match(/\{[\s\S]*\}/);
+                if (match) return JSON.parse(match[0]);
+                throw new Error('Gemini não retornou JSON. Resposta: ' + texto.substring(0, 50));
+            }
         }
 
 
@@ -577,7 +585,6 @@ Regras:
             formData.append('isOverlayRequired', 'false');
             formData.append('detectOrientation', 'true');
             formData.append('scale', 'true');
-            formData.append('isTable', 'true');
             formData.append('OCREngine', '2');
             const resp = await fetch('https://api.ocr.space/parse/image', {
                 method: 'POST',
