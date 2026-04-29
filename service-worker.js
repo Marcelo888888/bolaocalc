@@ -1,11 +1,12 @@
-const CACHE_NAME = 'bolaocalc-v11';
+const CACHE_NAME = 'bolaocalc-v12';
 const urlsToCache = [
   '.',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './qrcode.png'
 ];
 
 self.addEventListener('install', (event) => {
