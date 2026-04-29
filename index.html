@@ -279,9 +279,22 @@
         <div id="configModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999;align-items:center;justify-content:center;">
             <div style="background:#1a1a2e;border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:25px;margin:20px;max-width:440px;width:100%;">
                 <h3 style="color:#00d4ff;margin-bottom:15px;">⚙️ Configurações</h3>
-                <p style="color:#8892b0;font-size:0.85em;margin-bottom:10px;">Chave Gemini API (Google AI Studio — gratuito):<br>
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff;font-size:0.9em;">Obter chave gratuita →</a></p>
-                <input type="password" id="geminiKeyInput" placeholder="Cole sua chave aqui..."
+
+                <div style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:12px;margin-bottom:15px;">
+                    <p style="color:#ccd6f6;font-size:0.85em;margin-bottom:8px;font-weight:bold;">Como obter a chave Gemini (gratuito):</p>
+                    <p style="color:#8892b0;font-size:0.8em;line-height:1.6;">
+                        1. Acesse <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#00d4ff;">aistudio.google.com/apikey</a><br>
+                        2. Faça login com sua conta Google<br>
+                        3. Clique em <strong style="color:#ccd6f6;">Create API key</strong><br>
+                        4. Copie e cole abaixo
+                    </p>
+                    <div style="text-align:center;margin-top:10px;">
+                        <p style="color:#8892b0;font-size:0.75em;margin-bottom:6px;">📱 No celular: aponte a câmera para o QR code</p>
+                        <img src="qrcode.png" alt="QR Code aistudio.google.com/apikey" style="width:110px;height:110px;border-radius:8px;background:#fff;padding:4px;">
+                    </div>
+                </div>
+
+                <input type="password" id="geminiKeyInput" placeholder="Cole sua chave Gemini aqui (AIza...)"
                     style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;margin-bottom:15px;">
                 <button onclick="salvarConfig()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#1a1a2e;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1em;">Salvar</button>
                 <button onclick="fecharConfig()" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);color:#8892b0;border:1px solid rgba(255,255,255,0.1);border-radius:12px;cursor:pointer;margin-top:8px;">Cancelar</button>

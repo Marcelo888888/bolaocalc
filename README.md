@@ -4,6 +4,11 @@ Calculadora de cotas para bolões da Lotérica CAIXA. Tire foto do comprovante e
 
 **▶ Acesse:** https://marcelo888888.github.io/bolaocalc
 
+![QR Code](qrcode.png)
+
+> Aponte a câmera do celular para o QR code acima para abrir o app.
+> Após abrir, configure sua chave Gemini no ⚙️ (veja instruções abaixo).
+
 ---
 
 ## Como usar
