@@ -585,30 +585,31 @@
         // Prompt principal
         const GEMINI_PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Extraia os dados dos jogos e retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
 
-Comprovante tem duas seções:
-1. "COM TARIFA DE SERVIÇO": colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
-   - MOD-CONC ex "MEGA-2995": extraia modalidade="MEGA" e concurso="2995"
-   - C.T/C.V ex "3/0": qt = número ANTES da barra (3)
-   - pctTar = coluna %TAR (geralmente 35)
-   - vTarifa = V.TARIFA impresso; se ilegível, calcule vBolao * pctTar / 100
-2. "SEM TARIFA DE SERVIÇO": colunas MODALIDADE | QTDADE | VLR.BOLAO → vTarifa=0, pctTar=0
+IMPORTANTE: Leia APENAS a seção "BOLAO CAIXA - COM TARIFA DE SERVIÇO". IGNORE completamente tudo após a linha TOTAL dessa seção, incluindo a seção "SEM TARIFA DE SERVIÇO".
+
+Seção COM TARIFA: colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
+- MOD-CONC ex "MEGA-2995": extraia modalidade="MEGA" e concurso="2995"
+- C.T/C.V ex "3/0": qt = número ANTES da barra (3)
+- pctTar = coluna %TAR (geralmente 35)
+- vTarifa = V.TARIFA impresso; se ilegível, calcule vBolao * pctTar / 100
 
 Regras:
 - Extraia CADA LINHA separadamente. Linhas repetidas são jogos distintos.
-- Use o TOTAL impresso no comprovante para totalBolao e totalTarifa (seção COM TARIFA)
+- totalBolao e totalTarifa = valores da linha TOTAL da seção COM TARIFA
 - Valores com ponto decimal: 17.50 (não vírgula)
 
 Formato de saída:
 {"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
 
         // Prompt simplificado para retry
-        const GEMINI_PROMPT_RETRY = `Leia o comprovante de BOLÃO da CAIXA e retorne JSON puro:
+        const GEMINI_PROMPT_RETRY = `Leia o comprovante de BOLÃO da CAIXA e retorne JSON puro.
+Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa seção e ignore "SEM TARIFA".
+
 {"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
 
 - MOD-CONC "MEGA-2995" → modalidade="MEGA", concurso="2995"
 - C.T/C.V "3/0" → qt=3 (antes da barra)
 - Cada linha = 1 jogo. Não agrupe.
-- SEM TARIFA: vTarifa=0, pctTar=0
 - Se V.TARIFA ilegível: vBolao * pctTar / 100`;
 
         async function _callGemini(b64, mediaType, prompt, key, model) {
