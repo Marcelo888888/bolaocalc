@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bolaocalc-v8';
+const CACHE_NAME = 'bolaocalc-v9';
 const urlsToCache = [
   '.',
   './index.html',

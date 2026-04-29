@@ -204,6 +204,7 @@
             color: #ccd6f6;
         }
         .group-table tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+        .table-divider { border-top: 1px solid rgba(0,212,255,0.2); margin: 15px 0; }
         .group-table .total-row {
             font-weight: bold; background: rgba(0,212,255,0.15) !important;
             color: #00d4ff;
@@ -379,6 +380,13 @@
                     <div class="label">Valor Total</div>
                 </div>
             </div>
+            <table class="group-table">
+                <thead>
+                    <tr><th>Modalidade</th><th>Jogos</th><th>Cota (R$)</th></tr>
+                </thead>
+                <tbody id="tabelaModalidade"></tbody>
+            </table>
+            <div class="table-divider"></div>
             <table class="group-table">
                 <thead>
                     <tr><th>COTA (R$)</th><th>Qt</th></tr>
@@ -928,6 +936,24 @@ Formato de saída:
 
             const cotasOrdenadas = Object.keys(grupos).sort((a, b) => parseFloat(a) - parseFloat(b));
 
+            // Resumo por modalidade
+            const porModalidade = {};
+            for (const jogo of currentJogos) {
+                const mod = jogo.modalidade;
+                if (!porModalidade[mod]) porModalidade[mod] = { jogos: 0, cotas: 0, total: 0 };
+                porModalidade[mod].jogos++;
+                porModalidade[mod].cotas += jogo.qt;
+                porModalidade[mod].total += jogo.vBolao + jogo.vTarifa;
+            }
+            document.getElementById('tabelaModalidade').innerHTML = Object.entries(porModalidade).map(([mod, v]) => {
+                const cota = v.cotas > 0 ? (v.total / v.cotas).toFixed(2).replace('.', ',') : '0,00';
+                return `<tr>
+                    <td>${mod}</td>
+                    <td>${v.jogos} jogo${v.jogos > 1 ? 's' : ''} / ${v.cotas} cotas</td>
+                    <td>R$ ${cota}</td>
+                </tr>`;
+            }).join('');
+
             document.getElementById('totalCotas').textContent = totalCotas;
             document.getElementById('totalValor').textContent = 'R$ ' + totalValor.toFixed(2).replace('.', ',');
 
@@ -1007,14 +1033,26 @@ Formato de saída:
             const linhas = document.querySelectorAll('#tabelaCorpo tr:not(.total-row)');
 
             let texto = '🎰 *Resumo do Bolão*\n\n';
+
+            // Resumo por modalidade
+            const linhasModal = document.querySelectorAll('#tabelaModalidade tr');
+            if (linhasModal.length > 0) {
+                texto += '*Modalidade │ Jogos │ Cota*\n';
+                texto += '────────────────────────────\n';
+                linhasModal.forEach(linha => {
+                    const cols = linha.querySelectorAll('td');
+                    texto += `${cols[0].textContent} │ ${cols[1].textContent} │ ${cols[2].textContent}\n`;
+                });
+                texto += '\n';
+            }
+
+            // Detalhamento por cota
             texto += '*Cota (R$)* │ *Qt*\n';
             texto += '───────────┼─────\n';
-
             linhas.forEach(linha => {
                 const cols = linha.querySelectorAll('td');
                 texto += `${cols[0].textContent} │ ${cols[1].textContent}\n`;
             });
-
             texto += `───────────┼─────\n`;
             texto += `*TOTAL* │ *${totalCotas}*\n\n`;
             texto += `💰 *Valor Total:* ${totalValor}`;
