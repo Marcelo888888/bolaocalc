@@ -854,7 +854,9 @@ Formato de saída:
             currentTotalComprovante = totalComprovante;
 
             const somaBoloes = jogos.reduce((s, j) => s + j.vBolao, 0);
-            const diferenca = Math.abs(somaBoloes - totalComprovante);
+            const somaTarifas = jogos.reduce((s, j) => s + j.vTarifa, 0);
+            const somaTotal = somaBoloes + somaTarifas;
+            const diferenca = Math.abs(somaTotal - totalComprovante);
             const diffPercent = totalComprovante > 0 ? (diferenca / totalComprovante) * 100 : (jogos.length === 0 ? 100 : 0);
 
             document.getElementById('validationDetails').innerHTML = `
@@ -863,8 +865,8 @@ Formato de saída:
                     <span class="validation-value ${jogos.length > 0 ? 'ok' : 'error'}">${jogos.length} jogos</span>
                 </div>
                 <div class="validation-item">
-                    <span class="validation-label">🧮 Soma dos bolões</span>
-                    <span class="validation-value">R$ ${somaBoloes.toFixed(2).replace('.', ',')}</span>
+                    <span class="validation-label">🧮 Soma (bolão + tarifa)</span>
+                    <span class="validation-value">R$ ${somaTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div class="validation-item">
                     <span class="validation-label">📋 Total no comprovante</span>
