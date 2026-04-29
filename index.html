@@ -845,9 +845,6 @@ Formato de saída:
             currentJogos = jogos;
             currentTotalComprovante = totalComprovante;
 
-            const validationCard = document.getElementById('validationCard');
-            validationCard.classList.add('show');
-
             const somaBoloes = jogos.reduce((s, j) => s + j.vBolao, 0);
             const diferenca = Math.abs(somaBoloes - totalComprovante);
             const diffPercent = totalComprovante > 0 ? (diferenca / totalComprovante) * 100 : (jogos.length === 0 ? 100 : 0);
