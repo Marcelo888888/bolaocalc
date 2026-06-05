@@ -593,11 +593,15 @@
         function salvarConfig() {
             const key = document.getElementById('geminiKeyInput').value.trim();
             if (key) { localStorage.setItem('gemini_key', key); alert('✅ Chave salva!'); }
+            
             const lcaServer = document.getElementById('lcaServerInput').value.trim();
-            if (lcaServer) localStorage.setItem('lca_server', lcaServer);
+            if (lcaServer) { localStorage.setItem('lca_server', lcaServer); } else { localStorage.removeItem('lca_server'); }
+            
             const lcaOp = document.getElementById('lcaOperadorSelect').value;
-            if (lcaOp) localStorage.setItem('lca_operador', lcaOp);
+            if (lcaOp) { localStorage.setItem('lca_operador', lcaOp); } else { localStorage.removeItem('lca_operador'); }
+            
             fecharConfig();
+            if (typeof checkLcaConnection === 'function') checkLcaConnection();
         }
 
         async function fileToBase64(file) {
@@ -1434,9 +1438,12 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             const url = getLcaUrl();
             if (!url) { lcaConnected = false; updateConnIndicator(); return; }
             try {
-                const resp = await fetch(`${url}/`, {mode: 'cors', signal: AbortSignal.timeout(3000)});
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const resp = await fetch(`${url}/`, {mode: 'cors', signal: controller.signal});
+                clearTimeout(timeoutId);
                 lcaConnected = resp.ok;
-            } catch { lcaConnected = false; }
+            } catch (e) { lcaConnected = false; }
             updateConnIndicator();
         }
 
