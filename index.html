@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v20</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v21</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -867,11 +867,11 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                         const msg = errGemini.message || String(errGemini);
                         let dica = `❌ Gemini falhou. Erro: ${msg}`;
                         if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-                            dica = '❌ Quota Gemini esgotada. Gere uma nova chave em aistudio.google.com/apikey e configure no ⚙️';
+                            dica = `❌ Quota Gemini esgotada. Erro exato: ${msg}`;
                         } else if (msg.includes('400') || msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')) {
-                            dica = '❌ Chave Gemini inválida ou expirada. Configure uma nova no ⚙️';
+                            dica = `❌ Problema na Chave ou Requisição. Erro exato: ${msg}`;
                         } else if (msg.includes('404')) {
-                            dica = '❌ Modelo Gemini indisponível (404).';
+                            dica = `❌ Modelo Gemini indisponível (404). Erro exato: ${msg}`;
                         }
                         showErroGemini(dica);
                         return;
