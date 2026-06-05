@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc</h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v17</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -313,6 +313,7 @@
                 </div>
 
                 <button onclick="salvarConfig()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#1a1a2e;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1em;margin-top:15px;">Salvar</button>
+                <button onclick="forcarAtualizacao()" style="width:100%;padding:12px;background:rgba(255,107,107,0.1);color:#ff6b6b;border:1px solid rgba(255,107,107,0.3);border-radius:12px;cursor:pointer;margin-top:8px;">🔄 Forçar Atualização do App</button>
                 <button onclick="fecharConfig()" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);color:#8892b0;border:1px solid rgba(255,255,255,0.1);border-radius:12px;cursor:pointer;margin-top:8px;">Cancelar</button>
             </div>
         </div>
@@ -590,6 +591,21 @@
         function fecharConfig() {
             document.getElementById('configModal').style.display = 'none';
         }
+        
+        async function forcarAtualizacao() {
+            if (confirm('Isso vai apagar o cache atual e recarregar o app com a última versão. Deseja continuar?')) {
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        for (let r of regs) await r.unregister();
+                        const keys = await caches.keys();
+                        for (let k of keys) await caches.delete(k);
+                    } catch(e) {}
+                }
+                window.location.reload(true);
+            }
+        }
+
         function salvarConfig() {
             const key = document.getElementById('geminiKeyInput').value.trim();
             if (key) { localStorage.setItem('gemini_key', key); alert('✅ Chave salva!'); }
