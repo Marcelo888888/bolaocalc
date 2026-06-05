@@ -296,7 +296,23 @@
 
                 <input type="password" id="geminiKeyInput" placeholder="Cole sua chave Gemini aqui (AIza...)"
                     style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;margin-bottom:15px;">
-                <button onclick="salvarConfig()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#1a1a2e;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1em;">Salvar</button>
+
+                <div style="margin-top:15px;border-top:1px solid rgba(0,212,255,0.15);padding-top:15px;">
+                    <p style="color:#ccd6f6;font-size:0.85em;margin-bottom:8px;font-weight:bold;">📡 Conexão com o PC (LCA):</p>
+                    <input type="text" id="lcaServerInput" placeholder="IP do PC (ex: 192.168.1.100)"
+                        style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;margin-bottom:10px;">
+                    <select id="lcaOperadorSelect"
+                        style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;">
+                        <option value="">Selecione seu operador</option>
+                        <option value="1">Erica</option>
+                        <option value="2">Josi</option>
+                        <option value="3">Adri</option>
+                        <option value="4">Anderson</option>
+                        <option value="5">Gui</option>
+                    </select>
+                </div>
+
+                <button onclick="salvarConfig()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#1a1a2e;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:1em;margin-top:15px;">Salvar</button>
                 <button onclick="fecharConfig()" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);color:#8892b0;border:1px solid rgba(255,255,255,0.1);border-radius:12px;cursor:pointer;margin-top:8px;">Cancelar</button>
             </div>
         </div>
@@ -407,6 +423,11 @@
                 <tbody id="tabelaCorpo"></tbody>
             </table>
             <button class="btn-share" onclick="compartilhar()">📤 Compartilhar no WhatsApp</button>
+            <button class="btn-share" onclick="transmitirParaPC()" id="btnTransmitir"
+                style="background:linear-gradient(135deg, #6c63ff, #4834d4);margin-top:10px;display:none;">
+                📡 Transmitir para o PC
+            </button>
+            <div id="transmitStatus" style="text-align:center;margin-top:8px;font-size:0.85em;display:none;"></div>
             <button class="btn-reset" onclick="resetAll()">🔄 Novo Bolão</button>
         </div>
     </div>
@@ -562,6 +583,8 @@
 
         function abrirConfig() {
             document.getElementById('geminiKeyInput').value = getGeminiKey();
+            document.getElementById('lcaServerInput').value = localStorage.getItem('lca_server') || '';
+            document.getElementById('lcaOperadorSelect').value = localStorage.getItem('lca_operador') || '';
             document.getElementById('configModal').style.display = 'flex';
         }
         function fecharConfig() {
@@ -570,6 +593,10 @@
         function salvarConfig() {
             const key = document.getElementById('geminiKeyInput').value.trim();
             if (key) { localStorage.setItem('gemini_key', key); alert('✅ Chave salva!'); }
+            const lcaServer = document.getElementById('lcaServerInput').value.trim();
+            if (lcaServer) localStorage.setItem('lca_server', lcaServer);
+            const lcaOp = document.getElementById('lcaOperadorSelect').value;
+            if (lcaOp) localStorage.setItem('lca_operador', lcaOp);
             fecharConfig();
         }
 
@@ -986,6 +1013,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             `;
 
             document.getElementById('resultCard').classList.add('show');
+            updateTransmitButton();
         }
 
         // ===== MANUAL EDIT =====
@@ -1116,6 +1144,10 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             document.getElementById('textPreview').classList.remove('show');
             document.getElementById('textPreview').textContent = '';
             fileInput.value = '';
+            const btnT = document.getElementById('btnTransmitir');
+            if (btnT) { btnT.disabled = false; btnT.textContent = '📡 Transmitir para o PC'; btnT.style.background = 'linear-gradient(135deg, #6c63ff, #4834d4)'; }
+            const statusT = document.getElementById('transmitStatus');
+            if (statusT) { statusT.style.display = 'none'; statusT.textContent = ''; }
         }
 
         function handleFailedAttempt() {
@@ -1306,6 +1338,133 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             return maxVal;
         }
 
+
+        // ===== LCA TRANSMISSION =====
+        function getLcaUrl() {
+            const ip = localStorage.getItem('lca_server');
+            if (!ip) return null;
+            return `http://${ip}:8000`;
+        }
+
+        function getLcaOperador() {
+            return parseInt(localStorage.getItem('lca_operador')) || null;
+        }
+
+        // Show/hide transmit button based on config
+        function updateTransmitButton() {
+            const btn = document.getElementById('btnTransmitir');
+            if (btn) {
+                btn.style.display = getLcaUrl() ? 'block' : 'none';
+            }
+        }
+
+        async function transmitirParaPC() {
+            const url = getLcaUrl();
+            const opId = getLcaOperador();
+            const statusEl = document.getElementById('transmitStatus');
+
+            if (!url) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ Configure o IP do PC no ⚙️';
+                return;
+            }
+
+            if (!currentJogos || currentJogos.length === 0) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ Nenhum jogo para transmitir';
+                return;
+            }
+
+            const btn = document.getElementById('btnTransmitir');
+            btn.disabled = true;
+            btn.textContent = '📡 Transmitindo...';
+            statusEl.style.display = 'block';
+            statusEl.style.color = '#ffc107';
+            statusEl.textContent = '⏳ Enviando dados...';
+
+            try {
+                const payload = {
+                    operador_id: opId,
+                    jogos: currentJogos.map(j => ({
+                        modalidade: j.modalidade,
+                        concurso: j.concurso || '',
+                        qt: j.qt,
+                        vBolao: j.vBolao,
+                        vTarifa: j.vTarifa,
+                        pctTar: j.pctTar || 35,
+                        cota: j.cota
+                    })),
+                    totalBolao: currentJogos.reduce((s, j) => s + j.vBolao, 0),
+                    totalTarifa: currentJogos.reduce((s, j) => s + j.vTarifa, 0)
+                };
+
+                const resp = await fetch(`${url}/scan/boloes`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const result = await resp.json();
+
+                statusEl.style.color = '#28a745';
+                statusEl.textContent = `✅ Transmitido! Scan #${result.scan_id} salvo no PC.`;
+                btn.textContent = '✅ Transmitido!';
+                btn.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+
+            } catch (err) {
+                console.error('Transmissão falhou:', err);
+                statusEl.style.color = '#ff6b6b';
+                let msg = '❌ Falha na transmissão.';
+                if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                    msg = '❌ PC não encontrado. Verifique o IP no ⚙️ e se o LCA está rodando.';
+                }
+                statusEl.textContent = msg;
+                btn.disabled = false;
+                btn.textContent = '📡 Transmitir para o PC';
+                btn.style.background = 'linear-gradient(135deg, #6c63ff, #4834d4)';
+            }
+        }
+
+        // Connection indicator — check PC availability
+        let lcaConnected = false;
+        async function checkLcaConnection() {
+            const url = getLcaUrl();
+            if (!url) { lcaConnected = false; updateConnIndicator(); return; }
+            try {
+                const resp = await fetch(`${url}/`, {mode: 'cors', signal: AbortSignal.timeout(3000)});
+                lcaConnected = resp.ok;
+            } catch { lcaConnected = false; }
+            updateConnIndicator();
+        }
+
+        function updateConnIndicator() {
+            let ind = document.getElementById('lcaConnIndicator');
+            if (!ind) {
+                ind = document.createElement('span');
+                ind.id = 'lcaConnIndicator';
+                ind.style.cssText = 'position:absolute;left:20px;top:30px;font-size:0.7em;cursor:pointer;';
+                ind.title = 'Conexão com PC (LCA)';
+                ind.onclick = abrirConfig;
+                document.querySelector('.header').appendChild(ind);
+            }
+            const url = getLcaUrl();
+            if (!url) {
+                ind.textContent = '';
+            } else if (lcaConnected) {
+                ind.textContent = '🟢 PC';
+                ind.style.color = '#28a745';
+            } else {
+                ind.textContent = '🔴 PC';
+                ind.style.color = '#ff6b6b';
+            }
+        }
+
+        // Check connection every 30s
+        if (getLcaUrl()) checkLcaConnection();
+        setInterval(checkLcaConnection, 30000);
 
     </script>
 </body>
