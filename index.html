@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v18</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v20</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -723,6 +723,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
 
             let bestResult = null;
             let bestCheck = { valid: false, pctDiff: Infinity };
+            let lastError = '';
 
             // Tenta cada modelo disponível
             for (let mi = 0; mi < GEMINI_MODELS.length; mi++) {
@@ -731,40 +732,38 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 // 1ª tentativa: prompt detalhado
                 try {
                     setOcrStatus(`🤖 ${model} — analisando...`);
-                    console.log(`Tentando modelo: ${model} (prompt detalhado)`);
                     const result = await _callGemini(b64, mediaType, GEMINI_PROMPT_PRIMARY, key, model);
                     const check = _validateGeminiResult(result);
                     if (check.valid && check.consistent) {
-                        console.log(`✅ ${model} OK, diff=${check.pctDiff.toFixed(1)}%`);
                         return result;
                     }
                     if (check.valid && check.pctDiff < bestCheck.pctDiff) {
                         bestResult = result;
                         bestCheck = check;
-                        console.warn(`⚠️ ${model} inconsistente (${check.pctDiff.toFixed(1)}%), guardando como melhor até agora`);
                     }
+                    if (!check.valid) lastError = `Validação falhou: ${check.reason}`;
                 } catch (err1) {
-                    console.warn(`${model} prompt detalhado falhou:`, err1.message);
-                    // Se o modelo não existe (404), tenta o próximo modelo
+                    lastError = err1.message;
+                    if (err1.message.includes('400') || err1.message.includes('429')) throw err1;
                     if (err1.message.includes('404')) continue;
                 }
 
                 // 2ª tentativa com mesmo modelo: prompt simplificado
                 try {
                     setOcrStatus(`🔄 ${model} — tentativa alternativa...`);
-                    console.log(`Tentando modelo: ${model} (prompt simplificado)`);
                     const result2 = await _callGemini(b64, mediaType, GEMINI_PROMPT_RETRY, key, model);
                     const check2 = _validateGeminiResult(result2);
                     if (check2.valid && check2.consistent) {
-                        console.log(`✅ ${model} retry OK, diff=${check2.pctDiff.toFixed(1)}%`);
                         return result2;
                     }
                     if (check2.valid && check2.pctDiff < bestCheck.pctDiff) {
                         bestResult = result2;
                         bestCheck = check2;
                     }
+                    if (!check2.valid) lastError = `Validação (alt) falhou: ${check2.reason}`;
                 } catch (err2) {
-                    console.warn(`${model} retry falhou:`, err2.message);
+                    lastError = err2.message;
+                    if (err2.message.includes('400') || err2.message.includes('429')) throw err2;
                 }
             }
 
@@ -773,7 +772,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 console.log(`📋 Usando melhor resultado disponível, diff=${bestCheck.pctDiff.toFixed(1)}%`);
                 return bestResult;
             }
-            throw new Error('Nenhum modelo Gemini conseguiu extrair dados válidos');
+            throw new Error(`Nenhum modelo funcionou. Último erro: ${lastError}`);
         }
 
 
