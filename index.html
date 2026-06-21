@@ -472,6 +472,7 @@
         let currentAttempt = 0;
         let maxAttempts = 3;
         let currentJogos = [];
+        let leituraInicioMs = 0; // marca de tempo do início da leitura (cronômetro)
         let currentTotalComprovante = 0;
         let deferredPrompt;
 
@@ -690,9 +691,15 @@
         }
 
         // Prompt principal
-        const GEMINI_PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Extraia os dados dos jogos e retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
+        const GEMINI_PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
 
-IMPORTANTE: Leia APENAS a seção "BOLAO CAIXA - COM TARIFA DE SERVIÇO". IGNORE completamente tudo após a linha TOTAL dessa seção, incluindo a seção "SEM TARIFA DE SERVIÇO".
+PRIMEIRO, classifique o documento no campo "tipoDocumento":
+- "RESUMO_BOLAO": tem o título "RESUMO DE BOLÃO" E a seção "BOLAO CAIXA - COM TARIFA DE SERVICO" (colunas MOD-CONC / C.T/C.V / V.BOLAO / %TAR / V.TARIFA). Este é o documento certo.
+- "PIX": tem "LANÇAMENTOS EM PIX", "LISTAGEM PIX" ou "TOTAL DO RECEBIMENTO" (colunas NSU / DATA/HORA / VALOR / TIPO). Documento errado.
+- "OUTRO": qualquer outra coisa.
+Se NÃO for "RESUMO_BOLAO", retorne "jogos":[] e totais 0. Só extraia jogos quando for "RESUMO_BOLAO".
+
+Para "RESUMO_BOLAO": Leia APENAS a seção "BOLAO CAIXA - COM TARIFA DE SERVIÇO". IGNORE completamente tudo após a linha TOTAL dessa seção, incluindo a seção "SEM TARIFA DE SERVIÇO".
 
 Seção COM TARIFA: colunas MOD-CONC | C.T/C.V | V.BOLAO | %TAR | V.TARIFA
 - MOD-CONC ex "MEGA-2995": extraia modalidade="MEGA" e concurso="2995"
@@ -706,14 +713,16 @@ Regras:
 - Valores com ponto decimal: 17.50 (não vírgula)
 
 Formato de saída:
-{"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
+{"tipoDocumento":"RESUMO_BOLAO","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
 
         // Prompt simplificado para retry
-        const GEMINI_PROMPT_RETRY = `Leia o comprovante de BOLÃO da CAIXA e retorne JSON puro.
-Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa seção e ignore "SEM TARIFA".
+        const GEMINI_PROMPT_RETRY = `Leia o comprovante da CAIXA e retorne JSON puro.
 
-{"jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
+Classifique em "tipoDocumento": "RESUMO_BOLAO" se tiver "RESUMO DE BOLÃO" + "BOLAO CAIXA - COM TARIFA DE SERVICO"; "PIX" se tiver "LISTAGEM PIX" ou "TOTAL DO RECEBIMENTO"; senão "OUTRO". Se não for "RESUMO_BOLAO", retorne "jogos":[].
 
+{"tipoDocumento":"RESUMO_BOLAO","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
+
+Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa seção e ignore "SEM TARIFA".
 - MOD-CONC "MEGA-2995" → modalidade="MEGA", concurso="2995"
 - C.T/C.V "3/0" → qt=3 (antes da barra)
 - Cada linha = 1 jogo. Não agrupe.
@@ -794,6 +803,8 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 try {
                     setOcrStatus('🔍 Lendo comprovante...');
                     const result = await _callGemini(b64, mediaType, GEMINI_PROMPT_PRIMARY, key, model);
+                    // Documento não é Resumo de Bolão (ex.: PIX) — devolve para o chamador tratar, sem reprocessar
+                    if (result && result.tipoDocumento && result.tipoDocumento !== 'RESUMO_BOLAO') return result;
                     const check = _validateGeminiResult(result);
                     if (check.valid && check.consistent) {
                         return result;
@@ -814,6 +825,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 try {
                     setOcrStatus('🔄 Tentando de novo...');
                     const result2 = await _callGemini(b64, mediaType, GEMINI_PROMPT_RETRY, key, model);
+                    if (result2 && result2.tipoDocumento && result2.tipoDocumento !== 'RESUMO_BOLAO') return result2;
                     const check2 = _validateGeminiResult(result2);
                     if (check2.valid && check2.consistent) {
                         return result2;
@@ -876,8 +888,37 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             document.getElementById('detailCard').classList.add('show');
         }
 
+        // Documento errado (ex.: Listagem PIX). Avisa e volta para a câmera, sem montar tabela.
+        function mostrarDocErrado(tipo) {
+            document.getElementById('ocrLoading').classList.remove('show');
+            document.getElementById('detailCard').classList.remove('show');
+            document.getElementById('resultCard').classList.remove('show');
+            // não conta como tentativa de leitura falha (é só documento trocado)
+            if (currentAttempt > 0) { currentAttempt--; updateAttemptsUI(); }
+            const cam = document.getElementById('cameraSection');
+            let banner = document.getElementById('docErradoBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'docErradoBanner';
+                cam.insertBefore(banner, cam.firstChild);
+            }
+            const ehPix = tipo === 'PIX';
+            banner.innerHTML = `
+                <div style="background:#2a1500;border:2px solid #ffae00;border-radius:12px;padding:16px;margin-bottom:14px;color:#ffd54f;text-align:center;">
+                    <div style="font-size:1.6em;">⚠️</div>
+                    <div style="font-weight:bold;font-size:1.05em;margin:6px 0;">${ehPix ? 'Isto é a Listagem PIX' : 'Documento não reconhecido'}</div>
+                    <div style="font-size:0.9em;color:#ffe9a8;line-height:1.45;">Não é o Resumo de Bolão. Fotografe o relatório que começa com <b>"RESUMO DE BOLÃO"</b> e tem a seção <b>"COM TARIFA DE SERVIÇO"</b>.</div>
+                </div>`;
+            cam.style.display = 'block';
+            fileInput.value = '';
+            banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         async function processarArquivo(file) {
             if (!file) return;
+            leituraInicioMs = (performance && performance.now) ? performance.now() : Date.now();
+            const _bAnt = document.getElementById('docErradoBanner');
+            if (_bAnt) _bAnt.remove();
             currentAttempt++;
             updateAttemptsUI();
             document.getElementById('cameraSection').style.display = 'none';
@@ -889,6 +930,11 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 if (getGeminiKey()) {
                     try {
                         const resultado = await ocrWithGemini(file);
+                        // Gate: documento não é Resumo de Bolão (ex.: PIX) — avisa e não monta tabela
+                        if (resultado && resultado.tipoDocumento && resultado.tipoDocumento !== 'RESUMO_BOLAO') {
+                            mostrarDocErrado(resultado.tipoDocumento);
+                            return;
+                        }
                         const jogos = (resultado.jogos || []).map(j => {
                             const vBolao = Number(j.vBolao);
                             const pctTar = Number(j.pctTar || 0);
@@ -998,6 +1044,14 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                     <span class="validation-value ${diffPercent <= 10 ? 'ok' : (diffPercent <= 25 ? '' : 'error')}">R$ ${diferenca.toFixed(2).replace('.', ',')} (${diffPercent.toFixed(1)}%)</span>
                 </div>
             `;
+
+            // Cronômetro: tempo da foto até o resultado
+            if (leituraInicioMs) {
+                const _agora = (performance && performance.now) ? performance.now() : Date.now();
+                const _seg = (_agora - leituraInicioMs) / 1000;
+                document.getElementById('validationDetails').innerHTML += `
+                    <div style="text-align:center;color:#8892b0;font-size:0.78em;margin-top:8px;">⏱️ lido em ${_seg.toFixed(1).replace('.', ',')}s</div>`;
+            }
 
             // Vai direto para a tela de detalhes
             if (jogos.length === 0) {
@@ -1206,6 +1260,8 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
         }
 
         function resetAll() {
+            const _b = document.getElementById('docErradoBanner');
+            if (_b) _b.remove();
             attempts = [];
             currentAttempt = 0;
             currentJogos = [];
