@@ -253,33 +253,6 @@
             font-size: 0.82em; font-weight: bold; cursor: pointer; white-space: nowrap;
         }
 
-        .manual-card {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
-            border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
-        }
-        .manual-card.show { display: block; animation: fadeIn 0.5s; }
-
-        .manual-title {
-            text-align: center; color: #ffc107;
-            font-size: 1.1em; font-weight: bold; margin-bottom: 15px;
-        }
-
-        .manual-input-row {
-            display: flex; gap: 8px; margin-bottom: 10px; align-items: center;
-        }
-        .manual-input-row input, .manual-input-row select {
-            padding: 10px; border: 1px solid rgba(0,212,255,0.3);
-            border-radius: 8px; background: rgba(0,0,0,0.3);
-            color: #ccd6f6; font-size: 0.9em; flex: 1;
-        }
-        .manual-input-row input::placeholder { color: #8892b0; }
-
-        .btn-add-manual {
-            width: 100%; padding: 12px;
-            background: rgba(0,212,255,0.1); color: #00d4ff;
-            border: 1px solid rgba(0,212,255,0.3); border-radius: 10px;
-            font-size: 0.9em; font-weight: bold; cursor: pointer; margin-top: 5px;
-        }
 
         .text-preview {
             background: rgba(0,0,0,0.3); border: 1px solid rgba(0,212,255,0.2);
@@ -300,7 +273,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v25</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v31</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -363,7 +336,7 @@
 
         <div class="camera-card" id="cameraSection">
             <div class="camera-icon">📷</div>
-            <p style="color:#ccd6f6;margin-bottom:15px;">Tire foto ou digite os dados do comprovante</p>
+            <p style="color:#ccd6f6;margin-bottom:15px;">Tire uma foto do comprovante (ou busque na galeria)</p>
 
             <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
             <input type="file" id="fileInputGaleria" accept="image/*" style="display:none;">
@@ -374,12 +347,8 @@
                 🖼️ Buscar na Galeria
             </button>
 
-            <button class="btn-camera" onclick="showManualEdit()" style="background:linear-gradient(135deg,#ffc107,#ff8f00);margin-top:5px;">
-                ✏️ Digitar Manualmente
-            </button>
-
             <div class="hint-box">
-                💡 <strong>Dica:</strong> Se a foto não funcionar, use <strong>"Digitar Manualmente"</strong> — é mais rápido e confiável!
+                💡 <strong>Dica:</strong> Enquadre todo o relatório que começa com <strong>"RESUMO DE BOLÃO"</strong>, em local bem iluminado e sem reflexo.
             </div>
         </div>
 
@@ -391,6 +360,7 @@
 
         <div class="detail-card" id="detailCard">
             <div class="detail-title">📋 Detalhes (Linha a Linha)</div>
+            <div id="opLinhaDetail" style="text-align:center;color:#8892b0;font-size:0.82em;margin-bottom:10px;"></div>
             <div class="validation-details" id="validationDetails" style="margin-bottom:15px; background:rgba(10,25,47,0.7); padding:10px; border-radius:10px;"></div>
             <table class="detail-table">
                 <thead>
@@ -408,28 +378,11 @@
             </button>
         </div>
 
-        <div class="manual-card" id="manualCard">
-            <div class="manual-title">✏️ Entrada Manual dos Jogos</div>
-            <p style="color:#8892b0;font-size:0.85em;text-align:center;margin-bottom:5px;">
-                Digite os dados do comprovante:
-            </p>
-            <p style="color:#ffc107;font-size:0.78em;text-align:center;margin-bottom:15px;">
-                Modalidade → Quantidade → Valor do Bolão → Tarifa
-            </p>
-            <div id="manualInputs"></div>
-            <button class="btn-add-manual" onclick="addManualRow()">➕ Adicionar Outro Jogo</button>
-            <button class="btn-confirm" onclick="calculateManual()" style="margin-top:15px;">
-                🧮 Calcular Cotas
-            </button>
-            <button class="btn-reset" onclick="resetAll()" style="margin-top:10px;">
-                ← Voltar ao Início
-            </button>
-        </div>
-
         <div class="text-preview" id="textPreview"></div>
 
         <div class="result-card" id="resultCard">
             <div class="result-title">📊 Resumo dos Jogos</div>
+            <div id="opLinhaResult" style="text-align:center;color:#8892b0;font-size:0.82em;margin-bottom:12px;"></div>
             <div class="summary-grid">
                 <div class="summary-item">
                     <div class="valor" id="totalCotas">0</div>
@@ -474,6 +427,9 @@
         let currentJogos = [];
         let leituraInicioMs = 0; // marca de tempo do início da leitura (cronômetro)
         let currentTotalComprovante = 0;
+        let currentOperadorCaixa = '';   // nome do operador lido do comprovante (opcional)
+        let currentOperadorCodigo = '';  // código do operador (ex.: L282530) (opcional)
+        let currentTerminal = '';        // terminal/TERM lido do comprovante (opcional)
         let deferredPrompt;
 
         // ===== PWA =====
@@ -712,15 +668,22 @@ Regras:
 - totalBolao e totalTarifa = valores da linha TOTAL da seção COM TARIFA
 - Valores com ponto decimal: 17.50 (não vírgula)
 
+Do CABEÇALHO, quando legível, extraia também (campos OPCIONAIS — se ilegível, retorne ""):
+- operadorNome: nome após "OPERADOR:" (ex.: "ADRIANA DE ARAUJO MO")
+- operadorCodigo: código antes do nome do operador (ex.: "L282530")
+- terminal: número após "TERM" (ex.: "022045")
+
 Formato de saída:
-{"tipoDocumento":"RESUMO_BOLAO","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
+{"tipoDocumento":"RESUMO_BOLAO","operadorNome":"ADRIANA DE ARAUJO MO","operadorCodigo":"L282530","terminal":"022045","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
 
         // Prompt simplificado para retry
         const GEMINI_PROMPT_RETRY = `Leia o comprovante da CAIXA e retorne JSON puro.
 
 Classifique em "tipoDocumento": "RESUMO_BOLAO" se tiver "RESUMO DE BOLÃO" + "BOLAO CAIXA - COM TARIFA DE SERVICO"; "PIX" se tiver "LISTAGEM PIX" ou "TOTAL DO RECEBIMENTO"; senão "OUTRO". Se não for "RESUMO_BOLAO", retorne "jogos":[].
 
-{"tipoDocumento":"RESUMO_BOLAO","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
+Do cabeçalho extraia também (OPCIONAL, "" se ilegível): operadorNome (após "OPERADOR:"), operadorCodigo (código antes do nome) e terminal (após "TERM").
+
+{"tipoDocumento":"RESUMO_BOLAO","operadorNome":"ADRIANA DE ARAUJO MO","operadorCodigo":"L282530","terminal":"022045","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}
 
 Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa seção e ignore "SEM TARIFA".
 - MOD-CONC "MEGA-2995" → modalidade="MEGA", concurso="2995"
@@ -935,6 +898,10 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                             mostrarDocErrado(resultado.tipoDocumento);
                             return;
                         }
+                        // Cabeçalho (opcional): operador + terminal lidos do comprovante
+                        currentOperadorCaixa  = (resultado.operadorNome   || '').trim();
+                        currentOperadorCodigo = (resultado.operadorCodigo || '').trim();
+                        currentTerminal       = (resultado.terminal       || '').trim();
                         const jogos = (resultado.jogos || []).map(j => {
                             const vBolao = Number(j.vBolao);
                             const pctTar = Number(j.pctTar || 0);
@@ -1066,9 +1033,20 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             showDetails();
         }
 
+        // Linha discreta com operador/terminal lidos do comprovante (ou "não identificado")
+        function _opLinhaHtml() {
+            const nome = (currentOperadorCaixa || '').trim();
+            const term = (currentTerminal || '').trim();
+            const cod  = (currentOperadorCodigo || '').trim();
+            if (!nome && !term) return '👤 Operador não identificado';
+            return '👤 ' + (nome || '—') + (cod ? ' (' + cod + ')' : '') + (term ? ' · 🖥️ Term ' + term : '');
+        }
+
         // ===== SHOW DETAILS =====
         function showDetails() {
             document.getElementById('detailCard').classList.add('show');
+            const _opd = document.getElementById('opLinhaDetail');
+            if (_opd) _opd.innerHTML = _opLinhaHtml();
 
             const tbody = document.getElementById('detailCorpo');
             tbody.innerHTML = currentJogos.map((jogo, i) => {
@@ -1147,61 +1125,9 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             `;
 
             document.getElementById('resultCard').classList.add('show');
+            const _opr = document.getElementById('opLinhaResult');
+            if (_opr) _opr.innerHTML = _opLinhaHtml();
             updateTransmitButton();
-        }
-
-        // ===== MANUAL EDIT =====
-        function showManualEdit() {
-            document.getElementById('manualCard').classList.add('show');
-            document.getElementById('manualInputs').innerHTML = '';
-            addManualRow();
-        }
-
-        function addManualRow() {
-            const container = document.getElementById('manualInputs');
-            const id = container.children.length;
-
-            const div = document.createElement('div');
-            div.className = 'manual-input-row';
-            div.innerHTML = `
-                <select id="mod_${id}">
-                    <option value="MEGA">MEGA</option>
-                    <option value="QUINA">QUINA</option>
-                    <option value="LFACIL">LFACIL</option>
-                    <option value="LOTO">LOTO</option>
-                    <option value="LOTOMANIA">LOTOMANIA</option>
-                    <option value="TIMEMANIA">TIMEMANIA</option>
-                </select>
-                <input type="number" id="qt_${id}" placeholder="Qt" style="max-width:60px;">
-                <input type="number" id="bolao_${id}" placeholder="Bolão R$" step="0.01">
-                <input type="number" id="tarifa_${id}" placeholder="Tarifa R$" step="0.01">
-            `;
-            container.appendChild(div);
-        }
-
-        function calculateManual() {
-            const container = document.getElementById('manualInputs');
-            const rows = container.querySelectorAll('.manual-input-row');
-
-            currentJogos = [];
-            rows.forEach((row) => {
-                const modalidade = row.querySelector(`[id^="mod_"]`).value;
-                const qt = parseInt(row.querySelector(`[id^="qt_"]`).value) || 0;
-                const vBolao = parseFloat(row.querySelector(`[id^="bolao_"]`).value.replace(',','.')) || 0;
-                const vTarifa = parseFloat(row.querySelector(`[id^="tarifa_"]`).value.replace(',','.')) || 0;
-
-                if (qt > 0 && vBolao > 0) {
-                    const cota = (vBolao + vTarifa) / qt;
-                    currentJogos.push({
-                        modalidade,
-                        qt, vBolao, vTarifa,
-                        cota: Math.round(cota * 100) / 100
-                    });
-                }
-            });
-
-            document.getElementById('manualCard').classList.remove('show');
-            showDetails();
         }
 
         // ===== COMPARTILHAR =====
@@ -1249,14 +1175,15 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 
         // ===== RETAKE / RESET =====
         function retakePhoto() {
+            // Sempre voltar à câmera para nova foto (sem digitação manual).
+            // Esgotadas as 3 tentativas, zera o contador para o operador poder continuar.
             if (currentAttempt >= maxAttempts) {
-                document.getElementById('detailCard').classList.remove('show');
-                showManualEdit();
-            } else {
-                document.getElementById('detailCard').classList.remove('show');
-                document.getElementById('cameraSection').style.display = 'block';
-                fileInput.value = '';
+                currentAttempt = 0;
+                updateAttemptsUI();
             }
+            document.getElementById('detailCard').classList.remove('show');
+            document.getElementById('cameraSection').style.display = 'block';
+            fileInput.value = '';
         }
 
         function resetAll() {
@@ -1266,6 +1193,9 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             currentAttempt = 0;
             currentJogos = [];
             currentTotalComprovante = 0;
+            currentOperadorCaixa = '';
+            currentOperadorCodigo = '';
+            currentTerminal = '';
 
             document.getElementById('attemptsText').textContent = 'Tentativa 1 de 3';
             for (let i = 1; i <= 3; i++) {
@@ -1275,7 +1205,6 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 
             document.getElementById('cameraSection').style.display = 'block';
             document.getElementById('detailCard').classList.remove('show');
-            document.getElementById('manualCard').classList.remove('show');
             document.getElementById('resultCard').classList.remove('show');
             document.getElementById('textPreview').classList.remove('show');
             document.getElementById('textPreview').textContent = '';
@@ -1287,12 +1216,13 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         }
 
         function handleFailedAttempt() {
+            // Nunca prender o operador: sempre permitir nova foto.
             if (currentAttempt >= maxAttempts) {
-                showManualEdit();
-            } else {
-                document.getElementById('cameraSection').style.display = 'block';
-                fileInput.value = '';
+                currentAttempt = 0;
+                updateAttemptsUI();
             }
+            document.getElementById('cameraSection').style.display = 'block';
+            fileInput.value = '';
         }
 
         // ===== HELPERS =====
@@ -1538,6 +1468,9 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             try {
                 const payload = {
                     operador_id: opId,
+                    operador_caixa: currentOperadorCaixa || null,
+                    operador_codigo: currentOperadorCodigo || null,
+                    terminal: currentTerminal || null,
                     jogos: currentJogos.map(j => ({
                         modalidade: j.modalidade,
                         concurso: j.concurso || '',
