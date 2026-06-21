@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bolaocalc-v22';
+const CACHE_NAME = 'bolaocalc-v26';
 const urlsToCache = [
   '.',
   './index.html',
@@ -18,12 +18,23 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  // Network-first: tenta o PC primeiro, cai pro cache so se estiver offline.
+  // Assim o celular sempre pega a versao mais nova servida pelo PC (mesma rede).
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        if (response) return response;
-        return fetch(event.request);
+    fetch(req)
+      .then((resp) => {
+        // Atualiza o cache so com GET same-origin com status 200
+        try {
+          if (req.method === 'GET' && resp && resp.status === 200 &&
+              new URL(req.url).origin === self.location.origin) {
+            const copy = resp.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
+          }
+        } catch (e) { /* ignora */ }
+        return resp;
       })
+      .catch(() => caches.match(req))
   );
 });
 

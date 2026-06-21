@@ -36,8 +36,8 @@ qrcode.png           # QR code para acesso rápido
 - Entrada manual (fallback)
 
 ### 2. OCR com Gemini Vision
-- Modelo primário: `gemini-2.5-flash`
-- Fallbacks: `gemini-2.0-flash-lite`, `gemini-flash-latest`
+- Modelo primário: `gemini-3.5-flash`
+- Fallbacks: `gemini-2.5-flash`, `gemini-3.1-flash-lite`
 - 2 tentativas por modelo (prompt detalhado + simplificado)
 - Validação interna: compara soma dos jogos vs totais declarados (≤5% = consistente)
 - Chave API armazenada em `localStorage('gemini_key')`
@@ -93,9 +93,9 @@ Estrutura JSON esperada:
 Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa o calculado e marca como estimada.
 
 ### Modelos Gemini (ordem de tentativa)
-1. `gemini-2.5-flash` — primário, melhor qualidade
-2. `gemini-2.0-flash-lite` — fallback econômico
-3. `gemini-flash-latest` — fallback genérico
+1. `gemini-3.5-flash` — primário, melhor qualidade
+2. `gemini-2.5-flash` — fallback estável/maduro
+3. `gemini-3.1-flash-lite` — fallback econômico/rápido
 
 **Atenção:** `gemini-2.0-flash` e `gemini-1.5-flash` foram descontinuados/removidos da API.
 `responseMimeType: "application/json"` causa HTTP 400 com gemini-2.5-flash — não usar.

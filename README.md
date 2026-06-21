@@ -122,6 +122,6 @@ Após instalado, o app abre em tela cheia e funciona offline (exceto o OCR, que 
 ## Tecnologia
 
 - App 100% no navegador, sem servidor próprio
-- OCR por [Google Gemini Vision](https://aistudio.google.com) (modelo `gemini-2.5-flash`)
+- OCR por [Google Gemini Vision](https://aistudio.google.com) (modelo `gemini-3.5-flash`)
 - PWA com cache offline via Service Worker
 - Hospedado no GitHub Pages

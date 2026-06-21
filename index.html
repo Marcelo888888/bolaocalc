@@ -223,6 +223,36 @@
             font-size: 1em; font-weight: bold; cursor: pointer; margin-top: 10px;
         }
 
+        /* ===== Tela final: hierarquia de botões ===== */
+        .btn-primary-xl {
+            width: 100%; padding: 22px;
+            background: linear-gradient(135deg, #6c63ff, #4834d4);
+            color: white; border: none; border-radius: 16px;
+            font-size: 1.3em; font-weight: bold; cursor: pointer; margin-top: 15px;
+            box-shadow: 0 6px 20px rgba(108,99,255,0.45);
+        }
+        .btn-primary-xl:disabled { opacity: 0.7; }
+        .btn-row-final {
+            display: flex; gap: 10px; margin-top: 12px; align-items: stretch;
+        }
+        .btn-secondary {
+            flex: 1; padding: 15px;
+            background: rgba(220,53,69,0.18); color: #ff6b6b;
+            border: 1px solid rgba(220,53,69,0.5); border-radius: 14px;
+            font-size: 1em; font-weight: bold; cursor: pointer;
+        }
+        /* quando não há PC configurado, Novo Bolão vira a ação principal */
+        .btn-secondary.is-primary {
+            background: linear-gradient(135deg, #6c63ff, #4834d4);
+            color: #fff; border-color: transparent;
+        }
+        .btn-tiny {
+            flex: 0 0 auto; padding: 15px 14px;
+            background: rgba(37,211,102,0.14); color: #25d366;
+            border: 1px solid rgba(37,211,102,0.4); border-radius: 14px;
+            font-size: 0.82em; font-weight: bold; cursor: pointer; white-space: nowrap;
+        }
+
         .manual-card {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
             border-radius: 20px; padding: 20px; margin-bottom: 15px; display: none;
@@ -270,7 +300,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v22</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v25</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -423,13 +453,14 @@
                 </thead>
                 <tbody id="tabelaCorpo"></tbody>
             </table>
-            <button class="btn-share" onclick="compartilhar()">📤 Compartilhar no WhatsApp</button>
-            <button class="btn-share" onclick="transmitirParaPC()" id="btnTransmitir"
-                style="background:linear-gradient(135deg, #6c63ff, #4834d4);margin-top:10px;display:none;">
+            <button class="btn-primary-xl" onclick="transmitirParaPC()" id="btnTransmitir" style="display:none;">
                 📡 Transmitir para o PC
             </button>
             <div id="transmitStatus" style="text-align:center;margin-top:8px;font-size:0.85em;display:none;"></div>
-            <button class="btn-reset" onclick="resetAll()">🔄 Novo Bolão</button>
+            <div class="btn-row-final">
+                <button class="btn-secondary" id="btnNovoBolao" onclick="resetAll()">🔄 Novo Bolão</button>
+                <button class="btn-tiny" onclick="compartilhar()" title="Compartilhar no WhatsApp">📤 WhatsApp</button>
+            </div>
         </div>
     </div>
     
@@ -575,7 +606,7 @@
 
         // ===== GEMINI VISION (motor principal — tem CORS, é gratuito) =====
         // Tenta modelos do mais recente ao mais estável
-        const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-1.5-flash'];
+        const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
         let geminiModelIdx = 0; // índice do modelo atual
 
         function getGeminiKey() {
@@ -584,7 +615,19 @@
 
         function abrirConfig() {
             document.getElementById('geminiKeyInput').value = getGeminiKey();
-            document.getElementById('lcaServerInput').value = localStorage.getItem('lca_server') || '';
+            
+            const isLocal = (window.location.hostname !== 'marcelo888888.github.io' && window.location.hostname !== '');
+            const ipInput = document.getElementById('lcaServerInput');
+            if (isLocal) {
+                ipInput.value = window.location.host;
+                ipInput.disabled = true;
+                ipInput.style.opacity = '0.5';
+            } else {
+                ipInput.value = localStorage.getItem('lca_server') || '';
+                ipInput.disabled = false;
+                ipInput.style.opacity = '1';
+            }
+            
             document.getElementById('lcaOperadorSelect').value = localStorage.getItem('lca_operador') || '';
             document.getElementById('configModal').style.display = 'flex';
         }
@@ -608,16 +651,33 @@
 
         function salvarConfig() {
             const key = document.getElementById('geminiKeyInput').value.trim();
-            if (key) { localStorage.setItem('gemini_key', key); alert('✅ Chave salva!'); }
+            if (key) { localStorage.setItem('gemini_key', key); }
             
-            const lcaServer = document.getElementById('lcaServerInput').value.trim();
-            if (lcaServer) { localStorage.setItem('lca_server', lcaServer); } else { localStorage.removeItem('lca_server'); }
+            // Só salvar IP se o campo estiver habilitado (no GitHub Pages, não no acesso local)
+            const _ipInput = document.getElementById('lcaServerInput');
+            if (!_ipInput.disabled) {
+                const lcaServer = _ipInput.value.trim();
+                if (lcaServer) { localStorage.setItem('lca_server', lcaServer); } else { localStorage.removeItem('lca_server'); }
+            }
+            const lcaServer = _ipInput.value.trim();
             
             const lcaOp = document.getElementById('lcaOperadorSelect').value;
             if (lcaOp) { localStorage.setItem('lca_operador', lcaOp); } else { localStorage.removeItem('lca_operador'); }
             
             fecharConfig();
             if (typeof checkLcaConnection === 'function') checkLcaConnection();
+            
+            // Se estiver no GitHub Pages (HTTPS) com IP configurado, oferecer versão local
+            const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
+            const _cleanHost = lcaServer.split(':')[0].trim();
+            if (isGithubPages && _cleanHost && _cleanHost !== 'localhost' && _cleanHost !== '127.0.0.1') {
+                const localUrl = 'http://' + _cleanHost + ':8000/bolaocalc/';
+                if (confirm('✅ Configurado!\n\nPara transmitir para o PC, você precisa usar a versão local (HTTP).\n\nAbrir agora?\n' + localUrl)) {
+                    window.location.href = localUrl;
+                }
+            } else if (key) {
+                alert('✅ Configurações salvas!');
+            }
         }
 
         async function fileToBase64(file) {
@@ -671,13 +731,14 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                     ]}],
                     generationConfig: {
                         temperature: 0,
-                        maxOutputTokens: 8192
+                        maxOutputTokens: 8192,
+                        thinkingConfig: { thinkingBudget: 0 }
                     }
                 })
             });
             if (!resp.ok) {
                 const errBody = await resp.text().catch(() => '');
-                throw new Error(`Gemini HTTP ${resp.status}: ${errBody.substring(0, 100)}`);
+                throw new Error(`Leitura HTTP ${resp.status}: ${errBody.substring(0, 100)}`);
             }
             const json = await resp.json();
             let texto = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -731,7 +792,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
 
                 // 1ª tentativa: prompt detalhado
                 try {
-                    setOcrStatus(`🤖 ${model} — analisando...`);
+                    setOcrStatus('🔍 Lendo comprovante...');
                     const result = await _callGemini(b64, mediaType, GEMINI_PROMPT_PRIMARY, key, model);
                     const check = _validateGeminiResult(result);
                     if (check.valid && check.consistent) {
@@ -744,13 +805,14 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                     if (!check.valid) lastError = `Validação falhou: ${check.reason}`;
                 } catch (err1) {
                     lastError = err1.message;
-                    if (err1.message.includes('400') || err1.message.includes('429')) throw err1;
+                    // Erros de autenticação, permissão ou quota devem ser lançados imediatamente
+                    if (err1.message.includes('400') || err1.message.includes('401') || err1.message.includes('403') || err1.message.includes('429')) throw err1;
                     if (err1.message.includes('404')) continue;
                 }
 
                 // 2ª tentativa com mesmo modelo: prompt simplificado
                 try {
-                    setOcrStatus(`🔄 ${model} — tentativa alternativa...`);
+                    setOcrStatus('🔄 Tentando de novo...');
                     const result2 = await _callGemini(b64, mediaType, GEMINI_PROMPT_RETRY, key, model);
                     const check2 = _validateGeminiResult(result2);
                     if (check2.valid && check2.consistent) {
@@ -763,7 +825,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                     if (!check2.valid) lastError = `Validação (alt) falhou: ${check2.reason}`;
                 } catch (err2) {
                     lastError = err2.message;
-                    if (err2.message.includes('400') || err2.message.includes('429')) throw err2;
+                    if (err2.message.includes('400') || err2.message.includes('401') || err2.message.includes('403') || err2.message.includes('429')) throw err2;
                 }
             }
 
@@ -820,7 +882,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
             updateAttemptsUI();
             document.getElementById('cameraSection').style.display = 'none';
             document.getElementById('ocrLoading').classList.add('show');
-            setOcrStatus('🤖 Analisando com Gemini...');
+            setOcrStatus('🔍 Lendo comprovante...');
 
             try {
                 // 1º: Gemini Vision (tem CORS, gratuito)
@@ -857,7 +919,7 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                             };
                         });
                         const totalComprovante = Number(resultado.totalBolao || 0) + Number(resultado.totalTarifa || 0);
-                        setOcrStatus('✅ Gemini concluído!');
+                        setOcrStatus('✅ Leitura concluída!');
                         document.getElementById('ocrLoading').classList.remove('show');
                         validateData(jogos, totalComprovante);
                         return;
@@ -865,20 +927,20 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                         console.warn('Gemini falhou:', errGemini);
                         document.getElementById('ocrLoading').classList.remove('show');
                         const msg = errGemini.message || String(errGemini);
-                        let dica = `❌ Gemini falhou. Erro: ${msg}`;
+                        let dica = `❌ Não consegui ler o comprovante. Erro: ${msg}`;
                         if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-                            dica = `❌ Quota Gemini esgotada. Erro exato: ${msg}`;
-                        } else if (msg.includes('400') || msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')) {
-                            dica = `❌ Problema na Chave ou Requisição. Erro exato: ${msg}`;
+                            dica = `❌ Limite de leitura atingido. Erro: ${msg}`;
+                        } else if (msg.includes('400') || msg.includes('401') || msg.includes('403') || msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('key')) {
+                            dica = `❌ Leitura indisponível (verifique a configuração no ⚙️). Erro: ${msg}`;
                         } else if (msg.includes('404')) {
-                            dica = `❌ Modelo Gemini indisponível (404). Erro exato: ${msg}`;
+                            dica = `❌ Serviço de leitura indisponível (404). Erro: ${msg}`;
                         }
                         showErroGemini(dica);
                         return;
                     }
                 } else {
                     document.getElementById('ocrLoading').classList.remove('show');
-                    showErroGemini('❌ Chave Gemini não configurada. Toque no ⚙️ para configurar.');
+                    showErroGemini('❌ Leitura não configurada. Toque no ⚙️ para configurar.');
                     return;
                 }
 
@@ -1359,9 +1421,18 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
 
         // ===== LCA TRANSMISSION =====
         function getLcaUrl() {
-            const ip = localStorage.getItem('lca_server');
-            if (!ip) return null;
-            return `http://${ip}:8000`;
+            // Se estiver hospedado no próprio PC via IP de rede local, usa a própria origem
+            if (window.location.hostname !== 'marcelo888888.github.io' && window.location.hostname !== '') {
+                return window.location.origin;
+            }
+            // GitHub Pages: usa o IP salvo na configuração
+            const saved = localStorage.getItem('lca_server');
+            if (!saved) return null;
+            // Extrai só o hostname (sem porta, caso tenha sido salvo com porta)
+            const host = saved.split(':')[0].trim();
+            // Ignorar localhost/127.0.0.1 — não serve para o celular
+            if (!host || host === 'localhost' || host === '127.0.0.1') return null;
+            return `http://${host}:8000`;
         }
 
         function getLcaOperador() {
@@ -1370,9 +1441,15 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
 
         // Show/hide transmit button based on config
         function updateTransmitButton() {
+            const temPC = !!getLcaUrl();
             const btn = document.getElementById('btnTransmitir');
             if (btn) {
-                btn.style.display = getLcaUrl() ? 'block' : 'none';
+                btn.style.display = temPC ? 'block' : 'none';
+            }
+            // Sem PC configurado, "Novo Bolão" vira a ação principal da tela
+            const btnNovo = document.getElementById('btnNovoBolao');
+            if (btnNovo) {
+                btnNovo.classList.toggle('is-primary', !temPC);
             }
         }
 
@@ -1468,24 +1545,52 @@ Leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo após o TOTAL dessa
                 ind.id = 'lcaConnIndicator';
                 ind.style.cssText = 'position:absolute;left:20px;top:30px;font-size:0.7em;cursor:pointer;';
                 ind.title = 'Conexão com PC (LCA)';
-                ind.onclick = abrirConfig;
                 document.querySelector('.header').appendChild(ind);
             }
             const url = getLcaUrl();
+            const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
+            const savedIp = localStorage.getItem('lca_server');
             if (!url) {
                 ind.textContent = '';
+                ind.onclick = abrirConfig;
             } else if (lcaConnected) {
                 ind.textContent = '🟢 PC';
                 ind.style.color = '#28a745';
+                ind.onclick = abrirConfig;
+            } else if (isGithubPages && savedIp) {
+                // No GitHub Pages (HTTPS) o browser bloqueia HTTP local — mostrar link direto
+                const _ipHost = savedIp.split(':')[0].trim();
+                if (!_ipHost || _ipHost === 'localhost' || _ipHost === '127.0.0.1') {
+                    ind.textContent = '⚠️ IP inválido';
+                    ind.style.color = '#ff6b6b';
+                    ind.onclick = abrirConfig;
+                    return;
+                }
+                const localUrl = 'http://' + _ipHost + ':8000/bolaocalc/';
+                ind.innerHTML = '🔗 Abrir local';
+                ind.style.color = '#ffc107';
+                ind.title = 'Abrir BolãoCalc via rede local (HTTP) — resolve o bloqueio HTTPS';
+                ind.onclick = () => { if (confirm('Abrir BolãoCalc via rede local?\n' + localUrl)) window.location.href = localUrl; };
             } else {
                 ind.textContent = '🔴 PC';
                 ind.style.color = '#ff6b6b';
+                ind.onclick = abrirConfig;
             }
         }
 
         // Check connection every 30s
         if (getLcaUrl()) checkLcaConnection();
         setInterval(checkLcaConnection, 30000);
+
+        // Versao real lida do service-worker (fonte unica da verdade — bate com a aba SCAN do PC)
+        fetch('./service-worker.js', { cache: 'no-store' })
+            .then(r => r.text())
+            .then(t => {
+                const m = t.match(/bolaocalc-v(\d+)/);
+                const e = document.getElementById('appVersion');
+                if (m && e) e.textContent = 'v' + m[1];
+            })
+            .catch(() => {});
 
     </script>
 </body>
