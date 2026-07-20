@@ -634,7 +634,7 @@
             const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
             const _cleanHost = lcaServer.split(':')[0].trim();
             if (isGithubPages && _cleanHost && _cleanHost !== 'localhost' && _cleanHost !== '127.0.0.1') {
-                const localUrl = 'http://' + _cleanHost + ':8000/bolaocalc/';
+                const localUrl = localUrlComChave(_cleanHost, '/bolaocalc/');
                 if (confirm('✅ Configurado!\n\nPara transmitir para o PC, você precisa usar a versão local (HTTP).\n\nAbrir agora?\n' + localUrl)) {
                     window.location.href = localUrl;
                 }
@@ -878,7 +878,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             document.getElementById('fotoIntentModal').style.display = 'none';
             const ipHost = _fotoIntentIpHost;
             if (!ipHost) { fileInput.click(); return; }
-            const localUrl = 'http://' + ipHost + ':8000/bolaocalc/?autofoto=1';
+            const localUrl = localUrlComChave(ipHost, '/bolaocalc/?autofoto=1');
             window.location.href = localUrl;
         }
 
@@ -886,12 +886,26 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         // era pra transmitir, então abre a câmera sozinho (sem precisar tocar de novo).
         // Alguns navegadores bloqueiam input.click() fora de um gesto do usuário — por
         // isso também deixa o botão em destaque (pulsando) como reforço visual.
+        // Recebe a chave Gemini pelo HASH da URL (ver localUrlComChave) quando chega numa
+        // origem nova (IP local) que ainda não tem a chave salva no seu próprio localStorage.
+        // Só grava se não houver chave local já configurada (não sobrescreve por engano).
+        // Roda ANTES do autoFotoAoAbrirLocal abaixo pra garantir que a chave já esteja salva
+        // quando (e se) a câmera abrir sozinha e disparar o OCR.
+        (function sincronizarChaveDoHash() {
+            const m = (window.location.hash || '').match(/gk=([^&]+)/);
+            if (!m) return;
+            if (!getGeminiKey()) {
+                try { localStorage.setItem('gemini_key', decodeURIComponent(m[1])); } catch (e) {}
+            }
+            history.replaceState({}, '', window.location.pathname + window.location.search);
+        })();
+
         (function autoFotoAoAbrirLocal() {
             const params = new URLSearchParams(window.location.search);
             if (params.get('autofoto') !== '1') return;
             params.delete('autofoto');
             const resto = params.toString();
-            const cleanUrl = window.location.pathname + (resto ? '?' + resto : '') + window.location.hash;
+            const cleanUrl = window.location.pathname + (resto ? '?' + resto : '');
             history.replaceState({}, '', cleanUrl);
             setTimeout(() => {
                 try { fileInput.click(); } catch (e) {}
@@ -1424,6 +1438,18 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 
 
         // ===== LCA TRANSMISSION =====
+        // Monta a URL da versão local (HTTP, mesma origem do PC) já levando a chave Gemini
+        // junto no HASH da URL (nunca em query string — hash não é enviado pro servidor, não
+        // fica em log nenhum). Sem isso, cada origem (github.io vs IP local) tem seu próprio
+        // localStorage e o usuário precisaria configurar a chave de novo toda vez que a versão
+        // local abrisse pela primeira vez. `caminho` deve começar com "/", ex.: "/bolaocalc/".
+        function localUrlComChave(ipHost, caminho) {
+            let url = 'http://' + ipHost + ':8000' + caminho;
+            const key = getGeminiKey();
+            if (key) url += '#gk=' + encodeURIComponent(key);
+            return url;
+        }
+
         function getLcaUrl() {
             // Se estiver hospedado no próprio PC via IP de rede local, usa a própria origem
             if (window.location.hostname !== 'marcelo888888.github.io' && window.location.hostname !== '') {
@@ -1472,7 +1498,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                 const savedIp = localStorage.getItem('lca_server');
                 const ipHost = savedIp ? savedIp.split(':')[0].trim() : '';
                 if (ipHost && ipHost !== 'localhost' && ipHost !== '127.0.0.1') {
-                    const localUrl = 'http://' + ipHost + ':8000/bolaocalc/';
+                    const localUrl = localUrlComChave(ipHost, '/bolaocalc/');
                     if (confirm('Conexão com o PC ainda não confirmada nesta versão (HTTPS).\n\nAbrir a versão local para transmitir?\n(será preciso tirar a foto de novo por lá)\n\n' + localUrl)) {
                         window.location.href = localUrl;
                     }
@@ -1591,7 +1617,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                     ind.onclick = abrirConfig;
                     return;
                 }
-                const localUrl = 'http://' + _ipHost + ':8000/bolaocalc/';
+                const localUrl = localUrlComChave(_ipHost, '/bolaocalc/');
                 ind.innerHTML = '🔗 Abrir local';
                 ind.style.color = '#ffc107';
                 ind.title = 'Abrir BolãoCalc via rede local (HTTP) — resolve o bloqueio HTTPS';

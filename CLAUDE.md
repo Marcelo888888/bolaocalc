@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v34)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v35)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -101,6 +101,17 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 - O redirect antigo dentro de `transmitirParaPC()` (v1) **ficou como rede de segurança** — cobre o caso
   de alguém responder "uso manual" na foto e mudar de ideia já na tela de Resumo; nesse caso específico
   ainda perde os jogos lidos (é exceção, não o caminho normal).
+- **2026-07-20 (v4) — chave Gemini atravessa a troca de origem:** `localStorage` é isolado por origem
+  (github.io e IP local são origens diferentes) — sem isso, cada vez que a versão local abria pela
+  primeira vez, faltava a chave e o OCR falhava com "Leitura não configurada", obrigando reconfigurar
+  na mão. Todo redirect pra versão local (`fotoIntentTransmitir()`, o fallback em `transmitirParaPC()`,
+  o de `salvarConfig()` e o do indicador "🔗 Abrir local") agora usa `localUrlComChave(ipHost, caminho)`,
+  que anexa a chave no **hash** da URL (`#gk=...` — nunca em query string, hash não vai pro servidor/log).
+  `sincronizarChaveDoHash()` na página local lê o hash, grava em `localStorage` **só se ainda não
+  houver chave local** (não sobrescreve uma já configurada) e limpa o hash da barra de endereço.
+  **Limite:** só sincroniza nos redirects feitos pelo próprio app; abrir a versão local direto (ex.: QR
+  da aba Scan do LCA, sem passar por nenhum desses botões) ainda exige configurar a chave uma vez nessa
+  origem, manualmente.
 
 > Removido em 2026-07-20: botão/função "Compartilhar no WhatsApp" (`compartilhar()`, baseada em
 > `navigator.share`/`navigator.clipboard` — quebrava justamente no cenário acima, contexto HTTP inseguro).
@@ -111,7 +122,7 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 ## Configurações (localStorage)
 | Chave | Valor | Descrição |
 |-------|-------|-----------|
-| `gemini_key` | String | API key do Google AI Studio para Gemini Vision |
+| `gemini_key` | String | API key do Google AI Studio para Gemini Vision. **Isolado por origem** (github.io ≠ IP local) — ver v4 na seção 6 sobre como a chave atravessa a troca de origem nos redirects do próprio app. |
 | `lca_server` | String | IP/host do PC (LCA) salvo no ⚙️ — usado por `getLcaUrl()` fora do GitHub Pages, e como base do link "local" no GitHub Pages. Faltava nesta tabela até 2026-07-20 (corrigido). |
 | `lca_operador` | Number (id) | Operador selecionado no ⚙️ — vai no payload de `POST /scan/boloes`. Faltava nesta tabela até 2026-07-20 (corrigido). |
 

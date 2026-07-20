@@ -22,7 +22,7 @@ O app usa inteligência artificial (Google Gemini) para ler o comprovante. É gr
 3. No app, toque no ícone ⚙️ (canto superior direito)
 4. Cole a chave e salve
 
-A chave fica salva no aparelho — você só precisa configurar uma vez por dispositivo.
+A chave fica salva no navegador, mas **por endereço**, não por aparelho: `https://marcelo888888.github.io/bolaocalc` e a versão local (`http://<ip-do-pc>:8000/bolaocalc/`) contam como dois lugares separados pro navegador, cada um com sua própria "memória". Configurando pela primeira vez (item 4 acima) você não precisa repetir de novo nesse mesmo endereço. Quando o próprio app troca pra versão local sozinho (ao tocar em **📡 Transmitir PC** — ver item 2 abaixo), ele já leva a chave junto, então normalmente você só configura uma vez, mesmo usando as duas versões. A exceção é abrir a versão local por fora do app (ex.: pelo QR da aba Scan do LCA, direto) — aí sim, na primeira vez por ali, pede a chave de novo.
 
 ---
 
