@@ -319,6 +319,15 @@
             </div>
         </div>
 
+        <div id="fotoIntentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999;align-items:center;justify-content:center;">
+            <div style="background:#1a1a2e;border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:25px;margin:20px;max-width:400px;width:100%;text-align:center;">
+                <h3 style="color:#00d4ff;margin-bottom:10px;">📸 Essa foto é pra quê?</h3>
+                <p style="color:#8892b0;font-size:0.82em;margin-bottom:20px;line-height:1.5;">A conexão com o PC ainda não foi confirmada nesta versão (HTTPS). Se for transmitir, é melhor abrir a versão local antes de tirar a foto.</p>
+                <button onclick="fotoIntentTransmitir()" style="width:100%;padding:16px;background:linear-gradient(135deg,#6c63ff,#4834d4);color:#fff;border:none;border-radius:12px;font-weight:bold;font-size:1em;cursor:pointer;margin-bottom:10px;">📡 Transmitir PC</button>
+                <button onclick="fotoIntentManual()" style="width:100%;padding:16px;background:rgba(0,212,255,0.14);color:#00d4ff;border:1px solid rgba(0,212,255,0.4);border-radius:12px;font-weight:bold;font-size:1em;cursor:pointer;">🧮 Só Calc Manual</button>
+            </div>
+        </div>
+
         <div class="install-prompt" id="installPrompt">
             <p>📲 <strong>Instale este app!</strong></p>
             <p style="font-size:0.85em;color:#8892b0;margin:5px 0;">Funciona offline e fica na tela inicial</p>
@@ -842,26 +851,35 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         // Botão "Tirar Foto": se estiver no GitHub Pages (HTTPS) com PC configurado mas
         // conexão não confirmada, pergunta a intenção ANTES de abrir a câmera — assim a
         // troca de origem (se precisar) acontece antes da foto, e não depois (o que fazia
-        // perder os jogos já lidos e obrigar a repetir a foto).
+        // perder os jogos já lidos e obrigar a repetir a foto). Pergunta via modal próprio
+        // (botões "Só Calc Manual" / "Transmitir PC") em vez do confirm() nativo, que só
+        // permite OK/Cancelar genéricos.
+        let _fotoIntentIpHost = null;
         function iniciarFoto() {
             const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
             if (isGithubPages && !lcaConnected) {
                 const savedIp = localStorage.getItem('lca_server');
                 const ipHost = savedIp ? savedIp.split(':')[0].trim() : '';
                 if (ipHost && ipHost !== 'localhost' && ipHost !== '127.0.0.1') {
-                    const soUsoManual = confirm(
-                        'Essa foto é só para uso manual (sem transmitir para o PC)?\n\n' +
-                        'OK = sim, só uso manual (calcular aqui)\n' +
-                        'Cancelar = não, vou transmitir — abre a versão local e já tira a foto por lá'
-                    );
-                    if (!soUsoManual) {
-                        const localUrl = 'http://' + ipHost + ':8000/bolaocalc/?autofoto=1';
-                        window.location.href = localUrl;
-                        return;
-                    }
+                    _fotoIntentIpHost = ipHost;
+                    document.getElementById('fotoIntentModal').style.display = 'flex';
+                    return;
                 }
             }
             fileInput.click();
+        }
+
+        function fotoIntentManual() {
+            document.getElementById('fotoIntentModal').style.display = 'none';
+            fileInput.click();
+        }
+
+        function fotoIntentTransmitir() {
+            document.getElementById('fotoIntentModal').style.display = 'none';
+            const ipHost = _fotoIntentIpHost;
+            if (!ipHost) { fileInput.click(); return; }
+            const localUrl = 'http://' + ipHost + ':8000/bolaocalc/?autofoto=1';
+            window.location.href = localUrl;
         }
 
         // Retomada após a troca de origem acima: chegou na versão local já sabendo que

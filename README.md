@@ -31,10 +31,9 @@ A chave fica salva no aparelho — você só precisa configurar uma vez por disp
 1. Abra o app
 2. Toque em **📷 Tirar Foto** (usa a câmera traseira) ou **🖼️ Escolher da Galeria**
    - Se você acessou pelo link do GitHub Pages e o app ainda não confirmou a conexão com o PC (indicador
-     **🔗 Abrir local** no canto superior), ao tocar em **Tirar Foto** ele pergunta: *"Essa foto é só para
-     uso manual (sem transmitir para o PC)?"* — responda **OK** se for só calcular aqui mesmo, ou
-     **Cancelar** se for transmitir; nesse caso o app já troca pra versão local e abre a câmera por lá
-     sozinho (não perde a foto nem precisa repetir nada).
+     **🔗 Abrir local** no canto superior), ao tocar em **Tirar Foto** aparece uma telinha com dois botões:
+     **🧮 Só Calc Manual** (calcula aqui mesmo) ou **📡 Transmitir PC** (troca pra versão local e já abre
+     a câmera por lá sozinho — não perde a foto nem precisa repetir nada).
 3. Aguarde alguns segundos enquanto o Gemini lê o comprovante
 4. Confira os dados na tela de detalhes
 5. Toque em **📊 Ver Resumo** para ver as cotas

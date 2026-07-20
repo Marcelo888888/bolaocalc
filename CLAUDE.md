@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v33)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v34)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -65,16 +65,21 @@ qrcode.png           # QR code para acesso rápido
 - **2026-07-20 (v1):** clicar em "Transmitir para o PC" com a conexão não confirmada passou a abrir
   direto a versão local em vez de deixar o fetch falhar. Só que isso é navegação de página inteira (troca
   de origem) → `currentJogos` se perde → obrigava a repetir a foto. Feedback do Marcelo: inaceitável.
-- **2026-07-20 (v2, atual) — a pergunta migrou pra ANTES da foto:** `iniciarFoto()` (botão "📸 Tirar
-  Foto") checa a mesma condição (GitHub Pages + PC configurado + conexão não confirmada) e pergunta via
-  `confirm()`: **"Essa foto é só para uso manual (sem transmitir para o PC)?"** — OK = sim, segue local
-  mesmo (github.io) e abre a câmera normalmente; Cancelar = não (vai transmitir), redireciona pra
-  `http://<ip>:8000/bolaocalc/?autofoto=1` **antes** de tirar a foto. Na página local, a IIFE
-  `autoFotoAoAbrirLocal()` detecta `?autofoto=1`, limpa o parâmetro da URL (`history.replaceState`, evita
-  reabrir em F5) e tenta `fileInput.click()` sozinha; como alguns navegadores bloqueiam abrir o seletor de
-  arquivo fora de um gesto do usuário, o botão `#btnTirarFoto` também ganha destaque visual
+- **2026-07-20 (v2) — a pergunta migrou pra ANTES da foto:** `iniciarFoto()` (botão "📸 Tirar Foto") checa
+  a mesma condição (GitHub Pages + PC configurado + conexão não confirmada) e redireciona pra
+  `http://<ip>:8000/bolaocalc/?autofoto=1` **antes** de tirar a foto (se for o caso). Na página local, a
+  IIFE `autoFotoAoAbrirLocal()` detecta `?autofoto=1`, limpa o parâmetro da URL (`history.replaceState`,
+  evita reabrir em F5) e tenta `fileInput.click()` sozinha; como alguns navegadores bloqueiam abrir o
+  seletor de arquivo fora de um gesto do usuário, o botão `#btnTirarFoto` também ganha destaque visual
   (`.pulse-destaque`) e `scrollIntoView` como reforço — pior caso, é só 1 toque, não repete o fluxo todo.
   Resultado: nenhum jogo é perdido, porque a troca de origem acontece antes do OCR rodar.
+- **2026-07-20 (v3, atual) — modal próprio em vez de `confirm()`:** o `confirm()` nativo só permite
+  botões genéricos "OK"/"Cancelar", que exigiam uma frase explicativa longa pra não confundir qual era
+  qual. Trocado por `#fotoIntentModal` (mesmo padrão visual do `#configModal`) com dois botões diretos:
+  **"📡 Transmitir PC"** (chama `fotoIntentTransmitir()` → salva `_fotoIntentIpHost` e redireciona pra
+  `?autofoto=1`) e **"🧮 Só Calc Manual"** (chama `fotoIntentManual()` → fecha o modal e abre a câmera ali
+  mesmo). `iniciarFoto()` só abre o modal quando a condição (GitHub Pages + IP configurado + não
+  confirmado) é verdadeira; fora isso vai direto pra `fileInput.click()`.
 - O redirect antigo dentro de `transmitirParaPC()` (v1) **ficou como rede de segurança** — cobre o caso
   de alguém responder "uso manual" na foto e mudar de ideia já na tela de Resumo; nesse caso específico
   ainda perde os jogos lidos (é exceção, não o caminho normal).
