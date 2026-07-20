@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v35)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v36)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -163,7 +163,7 @@ Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa
 ## Erros Conhecidos e Tratamento
 | Erro | Causa | Tratamento |
 |------|-------|-----------|
-| HTTP 429 | Quota free tier esgotada | Mensagem: gerar nova chave |
+| HTTP 429 | Limite de requisições atingido — **a chave é da conta paga do Marcelo**, não é quota de free tier; provavelmente rate limit (req/min), não falta de crédito | Mensagem ao usuário: "❌ Limite de leitura atingido" (código não sugere gerar nova chave — isso não resolve rate limit numa chave paga do mesmo projeto) |
 | HTTP 400 expired | Chave expirada | Mensagem: configurar nova chave no ⚙️ |
 | HTTP 404 | Modelo descontinuado | Tenta próximo modelo da lista |
 | JSON truncado | maxOutputTokens insuficiente | Aumentar limite (hoje: 8192) |

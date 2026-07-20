@@ -15,7 +15,7 @@ Calculadora de cotas para bolões da Lotérica CAIXA. Tire foto do comprovante e
 
 ### 1. Primeira vez — configure a chave Gemini
 
-O app usa inteligência artificial (Google Gemini) para ler o comprovante. É gratuito e leva 1 minuto configurar:
+O app usa inteligência artificial (Google Gemini) para ler o comprovante. Usamos a chave da conta paga do Marcelo (não é a do tier gratuito) — leva 1 minuto configurar:
 
 1. Acesse [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e faça login com sua conta Google
 2. Clique em **"Create API key"** e copie a chave gerada (começa com `AIza...`)
@@ -117,7 +117,7 @@ Após instalado, o app abre em tela cheia e funciona offline (exceto o OCR, que 
 
 | Problema | Solução |
 |---|---|
-| "Quota Gemini esgotada" | Gere uma nova chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| "❌ Limite de leitura atingido" (HTTP 429) | Chave é da conta **paga**, então não é falta de crédito de tier gratuito — mais provável ser limite de requisições por minuto (rate limit). Espere um pouco e tente de novo; se persistir, confira a quota/billing da chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) ou no Google Cloud Console |
 | "Chave inválida ou expirada" | Configure uma nova chave no ⚙️ |
 | App mostra versão antiga (PC/Chrome) | F12 → Application → Service Workers → Unregister → Ctrl+Shift+R |
 | App mostra versão antiga (celular) | Feche o app completamente e reabra; se persistir, remova o ícone da tela de início e adicione de novo. Confira a versão mostrada dentro do app (deve bater com a linha `CACHE_NAME` de `service-worker.js`) |
