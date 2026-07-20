@@ -64,6 +64,12 @@
         }
         .btn-camera:active { transform: scale(0.97); }
 
+        @keyframes pulseDestaque {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.6); }
+            50% { box-shadow: 0 0 0 14px rgba(0,212,255,0); }
+        }
+        .pulse-destaque { animation: pulseDestaque 1.1s ease-out 3; }
+
         .hint-box {
             background: rgba(255,193,7,0.1); border-left: 3px solid #ffc107;
             padding: 12px; border-radius: 0 10px 10px 0;
@@ -246,14 +252,6 @@
             background: linear-gradient(135deg, #6c63ff, #4834d4);
             color: #fff; border-color: transparent;
         }
-        .btn-tiny {
-            flex: 0 0 auto; padding: 15px 14px;
-            background: rgba(37,211,102,0.14); color: #25d366;
-            border: 1px solid rgba(37,211,102,0.4); border-radius: 14px;
-            font-size: 0.82em; font-weight: bold; cursor: pointer; white-space: nowrap;
-        }
-
-
         .text-preview {
             background: rgba(0,0,0,0.3); border: 1px solid rgba(0,212,255,0.2);
             border-radius: 10px; padding: 10px; margin-top: 15px; font-family: monospace;
@@ -340,7 +338,7 @@
 
             <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
             <input type="file" id="fileInputGaleria" accept="image/*" style="display:none;">
-            <button class="btn-camera" onclick="document.getElementById('fileInput').click()">
+            <button class="btn-camera" id="btnTirarFoto" onclick="iniciarFoto()">
                 📸 Tirar Foto
             </button>
             <button class="btn-camera" onclick="document.getElementById('fileInputGaleria').click()" style="background:linear-gradient(135deg,#6c63ff,#4834d4);margin-top:5px;">
@@ -412,7 +410,6 @@
             <div id="transmitStatus" style="text-align:center;margin-top:8px;font-size:0.85em;display:none;"></div>
             <div class="btn-row-final">
                 <button class="btn-secondary" id="btnNovoBolao" onclick="resetAll()">🔄 Novo Bolão</button>
-                <button class="btn-tiny" onclick="compartilhar()" title="Compartilhar no WhatsApp">📤 WhatsApp</button>
             </div>
         </div>
     </div>
@@ -842,6 +839,52 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         const fileInput = document.getElementById('fileInput');
         const fileInputGaleria = document.getElementById('fileInputGaleria');
 
+        // Botão "Tirar Foto": se estiver no GitHub Pages (HTTPS) com PC configurado mas
+        // conexão não confirmada, pergunta a intenção ANTES de abrir a câmera — assim a
+        // troca de origem (se precisar) acontece antes da foto, e não depois (o que fazia
+        // perder os jogos já lidos e obrigar a repetir a foto).
+        function iniciarFoto() {
+            const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
+            if (isGithubPages && !lcaConnected) {
+                const savedIp = localStorage.getItem('lca_server');
+                const ipHost = savedIp ? savedIp.split(':')[0].trim() : '';
+                if (ipHost && ipHost !== 'localhost' && ipHost !== '127.0.0.1') {
+                    const soUsoManual = confirm(
+                        'Essa foto é só para uso manual (sem transmitir para o PC)?\n\n' +
+                        'OK = sim, só uso manual (calcular aqui)\n' +
+                        'Cancelar = não, vou transmitir — abre a versão local e já tira a foto por lá'
+                    );
+                    if (!soUsoManual) {
+                        const localUrl = 'http://' + ipHost + ':8000/bolaocalc/?autofoto=1';
+                        window.location.href = localUrl;
+                        return;
+                    }
+                }
+            }
+            fileInput.click();
+        }
+
+        // Retomada após a troca de origem acima: chegou na versão local já sabendo que
+        // era pra transmitir, então abre a câmera sozinho (sem precisar tocar de novo).
+        // Alguns navegadores bloqueiam input.click() fora de um gesto do usuário — por
+        // isso também deixa o botão em destaque (pulsando) como reforço visual.
+        (function autoFotoAoAbrirLocal() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('autofoto') !== '1') return;
+            params.delete('autofoto');
+            const resto = params.toString();
+            const cleanUrl = window.location.pathname + (resto ? '?' + resto : '') + window.location.hash;
+            history.replaceState({}, '', cleanUrl);
+            setTimeout(() => {
+                try { fileInput.click(); } catch (e) {}
+                const btn = document.getElementById('btnTirarFoto');
+                if (btn) {
+                    btn.classList.add('pulse-destaque');
+                    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 300);
+        })();
+
         function showErroGemini(msg) {
             document.getElementById('cameraSection').style.display = 'block';
             document.getElementById('validationDetails').innerHTML = `
@@ -1130,49 +1173,6 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             updateTransmitButton();
         }
 
-        // ===== COMPARTILHAR =====
-        function compartilhar() {
-            const totalCotas = document.getElementById('totalCotas').textContent;
-            const totalValor = document.getElementById('totalValor').textContent;
-            const linhas = document.querySelectorAll('#tabelaCorpo tr:not(.total-row)');
-
-            let texto = '🎰 *Resumo do Bolão*\n\n';
-
-            // Resumo por modalidade
-            const linhasModal = document.querySelectorAll('#tabelaModalidade tr');
-            if (linhasModal.length > 0) {
-                texto += '*Modalidade │ Jogos │ Cota*\n';
-                texto += '────────────────────────────\n';
-                linhasModal.forEach(linha => {
-                    const cols = linha.querySelectorAll('td');
-                    texto += `${cols[0].textContent} │ ${cols[1].textContent} │ ${cols[2].textContent}\n`;
-                });
-                texto += '\n';
-            }
-
-            // Detalhamento por cota
-            texto += '*Cota (R$)* │ *Qt*\n';
-            texto += '───────────┼─────\n';
-            linhas.forEach(linha => {
-                const cols = linha.querySelectorAll('td');
-                texto += `${cols[0].textContent} │ ${cols[1].textContent}\n`;
-            });
-            texto += `───────────┼─────\n`;
-            texto += `*TOTAL* │ *${totalCotas}*\n\n`;
-            texto += `💰 *Valor Total:* ${totalValor}`;
-
-            if (navigator.share) {
-                navigator.share({ title: 'Resumo do Bolão', text: texto });
-            } else {
-                navigator.clipboard.writeText(texto).then(() => {
-                    alert('✅ Resumo copiado! Cole no WhatsApp.');
-                }).catch(() => {
-                    const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
-                    window.open(url, '_blank');
-                });
-            }
-        }
-
         // ===== RETAKE / RESET =====
         function retakePhoto() {
             // Sempre voltar à câmera para nova foto (sem digitação manual).
@@ -1443,6 +1443,24 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             const url = getLcaUrl();
             const opId = getLcaOperador();
             const statusEl = document.getElementById('transmitStatus');
+
+            // No GitHub Pages (HTTPS) o navegador bloqueia o fetch pro PC em HTTP
+            // (conteúdo misto) mesmo com IP configurado — o POST sempre falharia.
+            // Se a conexão ainda não foi confirmada, abre direto a versão local
+            // (mesmo caminho do indicador "🔗 Abrir local") em vez de deixar o
+            // usuário ver "PC não encontrado".
+            const isGithubPages = window.location.hostname === 'marcelo888888.github.io';
+            if (isGithubPages && !lcaConnected) {
+                const savedIp = localStorage.getItem('lca_server');
+                const ipHost = savedIp ? savedIp.split(':')[0].trim() : '';
+                if (ipHost && ipHost !== 'localhost' && ipHost !== '127.0.0.1') {
+                    const localUrl = 'http://' + ipHost + ':8000/bolaocalc/';
+                    if (confirm('Conexão com o PC ainda não confirmada nesta versão (HTTPS).\n\nAbrir a versão local para transmitir?\n(será preciso tirar a foto de novo por lá)\n\n' + localUrl)) {
+                        window.location.href = localUrl;
+                    }
+                    return;
+                }
+            }
 
             if (!url) {
                 statusEl.style.display = 'block';

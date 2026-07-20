@@ -30,6 +30,11 @@ A chave fica salva no aparelho — você só precisa configurar uma vez por disp
 
 1. Abra o app
 2. Toque em **📷 Tirar Foto** (usa a câmera traseira) ou **🖼️ Escolher da Galeria**
+   - Se você acessou pelo link do GitHub Pages e o app ainda não confirmou a conexão com o PC (indicador
+     **🔗 Abrir local** no canto superior), ao tocar em **Tirar Foto** ele pergunta: *"Essa foto é só para
+     uso manual (sem transmitir para o PC)?"* — responda **OK** se for só calcular aqui mesmo, ou
+     **Cancelar** se for transmitir; nesse caso o app já troca pra versão local e abre a câmera por lá
+     sozinho (não perde a foto nem precisa repetir nada).
 3. Aguarde alguns segundos enquanto o Gemini lê o comprovante
 4. Confira os dados na tela de detalhes
 5. Toque em **📊 Ver Resumo** para ver as cotas
@@ -66,9 +71,11 @@ Duas tabelas:
 
 ---
 
-### 4. Compartilhar no WhatsApp
+### 4. Transmitir para o PC
 
-Toque em **📤 Compartilhar no WhatsApp** para enviar o resumo formatado para o grupo do bolão, com resumo por modalidade e tabela de cotas.
+Toque em **📡 Transmitir para o PC** (na tela de Resumo) para enviar os jogos direto pro LCA (aba Scan), sem precisar digitar de novo lá.
+
+A troca pra versão local (quando necessária) já acontece **antes** da foto — ver item 2 acima — então na hora de transmitir normalmente está tudo certo. Esse botão também tem uma rede de segurança: se por acaso você chegar até aqui ainda no GitHub Pages sem a conexão confirmada, tocar nele oferece abrir a versão local — só que, nesse caso específico, os jogos já lidos se perdem e é preciso tirar a foto de novo por lá.
 
 ---
 
