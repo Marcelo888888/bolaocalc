@@ -23,8 +23,20 @@ manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
 apple-touch-icon.png # Ícone iOS
-qrcode.png           # QR code para acesso rápido
+qrcode.png           # QR do link p/ gerar a chave Gemini (aistudio.google.com/apikey) — usado DENTRO do
+                      # app, no modal ⚙️ Configurações. NÃO abre o app — corrigido em 2026-07-20 depois
+                      # do README/topo apontar pra ele por engano (ver qrcode_app.png abaixo).
+qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolaocalc) — usado no topo
+                      # do README.md. Gerado em 2026-07-20 (antes disso o README usava qrcode.png por
+                      # engano, que na real aponta pra outro lugar — ver acima).
 ```
+
+> Existe um TERCEIRO QR, gerado em tempo real (não é arquivo estático aqui) — o da aba **Scan** do LCA
+> principal (`js/scan.js`, `scanRenderQrBox()`), que aponta pro endereço da rede local
+> (`http://<ip-do-pc>:8000/bolaocalc/`). Esse é o recomendado pra abrir/usar o app na loja (sem bloqueio
+> de conteúdo misto), mas **não é instalável como PWA completo** — HTTP não-localhost não é "contexto
+> seguro", então o service worker não registra e o banner de instalar não aparece ali. Pra instalar de
+> verdade (ícone próprio, offline), o caminho é a URL do GitHub Pages (HTTPS).
 
 ---
 
@@ -34,7 +46,13 @@ qrcode.png           # QR code para acesso rápido
 - Foto pela câmera (capture="environment") via `iniciarFoto()` — ver nota de 2026-07-20 na seção 6
   sobre a pergunta "uso manual?" antes de abrir a câmera.
 - Upload da galeria
-- Entrada manual (fallback)
+- ~~Entrada manual (fallback)~~ — **removida** (commit "Fases 3-5 ... remove digitacao manual", SW v31,
+  antes de qualquer trabalho de 2026-07-20). `retakePhoto()` só reabre a câmera; não existe mais botão
+  "✏️ Digitar Manualmente" no HTML nem no README. Se essa doc dizia o contrário até 2026-07-20, estava
+  desatualizada — corrigido.
+- Gate de documento errado (não documentado até 2026-07-20): `mostrarDocErrado(tipo)` — se o Gemini
+  identificar que a foto não é o Resumo de Bolão (ex.: Listagem PIX), mostra aviso específico e volta pra
+  câmera sem montar tabela nem contar como tentativa falha.
 
 ### 2. OCR com Gemini Vision
 - Modelo primário: `gemini-3.5-flash`
@@ -94,6 +112,8 @@ qrcode.png           # QR code para acesso rápido
 | Chave | Valor | Descrição |
 |-------|-------|-----------|
 | `gemini_key` | String | API key do Google AI Studio para Gemini Vision |
+| `lca_server` | String | IP/host do PC (LCA) salvo no ⚙️ — usado por `getLcaUrl()` fora do GitHub Pages, e como base do link "local" no GitHub Pages. Faltava nesta tabela até 2026-07-20 (corrigido). |
+| `lca_operador` | Number (id) | Operador selecionado no ⚙️ — vai no payload de `POST /scan/boloes`. Faltava nesta tabela até 2026-07-20 (corrigido). |
 
 ---
 
@@ -136,7 +156,7 @@ Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa
 | HTTP 400 expired | Chave expirada | Mensagem: configurar nova chave no ⚙️ |
 | HTTP 404 | Modelo descontinuado | Tenta próximo modelo da lista |
 | JSON truncado | maxOutputTokens insuficiente | Aumentar limite (hoje: 8192) |
-| `validationCard` null | Elemento removido do HTML | Removida referência no JS |
+| Documento errado (ex.: Listagem PIX) | Foto não é o Resumo de Bolão | `mostrarDocErrado(tipo)` avisa e volta pra câmera, sem contar tentativa |
 
 ---
 
@@ -148,5 +168,13 @@ Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa
 ---
 
 ## Relação com Outros Projetos
-- **INDEPENDENTE** do projeto PDV Gráfica (`pdv-grafica/`)
-- Compartilham apenas o diretório pai (`Antigravity_Testes/`)
+> Corrigido em 2026-07-20 — a versão anterior citava uma pasta (`Antigravity_Testes/`) que não existe
+> mais no ambiente atual; ficou desatualizada numa reorganização de pastas não registrada aqui.
+
+- Vive em disco dentro do repo do LCA (`C:\dev\Sist_Lca\bolaocalc\`), mas é um **git independente**
+  (remoto próprio `github.com/Marcelo888888/bolaocalc.git`, branch `main`) — commits e push aqui NÃO
+  passam pelo git do `Sist_Lca` (remoto `github.com/Marcelo888888/Sist_Lca.git`). É preciso `git push`
+  dentro da própria pasta `bolaocalc/` pra publicar no GitHub Pages; editar o arquivo local não basta
+  (isso já causou confusão em 2026-07-20 — ver `memory` do Cowork, "iPhone versão antiga").
+- **INDEPENDENTE** do projeto PDV Gráfica — não encontrado em `C:\dev` no ambiente atual; se existir,
+  é em outro lugar/máquina, sem relação de código com este app.

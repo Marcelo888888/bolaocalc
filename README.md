@@ -4,7 +4,7 @@ Calculadora de cotas para bolões da Lotérica CAIXA. Tire foto do comprovante e
 
 **▶ Acesse:** https://marcelo888888.github.io/bolaocalc
 
-![QR Code](qrcode.png)
+![QR Code](qrcode_app.png)
 
 > Aponte a câmera do celular para o QR code acima para abrir o app.
 > Após abrir, configure sua chave Gemini no ⚙️ (veja instruções abaixo).
@@ -84,7 +84,7 @@ A troca pra versão local (quando necessária) já acontece **antes** da foto �
 - **Foto reta** — não inclinada, de cima para baixo
 - **Comprovante inteiro** — inclua o cabeçalho e os totais finais
 - **Se tiver anotações de caneta** — o Gemini ignora automaticamente, mas quanto menos melhor
-- **Foto não funcionou?** — tente mais 2 vezes (o app permite 3 tentativas) ou use **✏️ Digitar Manualmente**
+- **Foto não funcionou?** — tente mais 2 vezes (o app permite 3 tentativas); depois disso o contador reinicia sozinho pra você tirar outra foto (não tem mais entrada manual — foi removida)
 
 ---
 
@@ -119,9 +119,11 @@ Após instalado, o app abre em tela cheia e funciona offline (exceto o OCR, que 
 |---|---|
 | "Quota Gemini esgotada" | Gere uma nova chave em [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | "Chave inválida ou expirada" | Configure uma nova chave no ⚙️ |
-| App mostra versão antiga | F12 → Application → Service Workers → Unregister → Ctrl+Shift+R |
+| App mostra versão antiga (PC/Chrome) | F12 → Application → Service Workers → Unregister → Ctrl+Shift+R |
+| App mostra versão antiga (celular) | Feche o app completamente e reabra; se persistir, remova o ícone da tela de início e adicione de novo. Confira a versão mostrada dentro do app (deve bater com a linha `CACHE_NAME` de `service-worker.js`) |
 | Tarifa marcada com * amarelo | O app estimou a tarifa por cálculo (vBolão × %TAR) pois o valor no comprovante estava ilegível |
 | 0 jogos encontrados | Tire outra foto com mais luz e enquadramento melhor |
+| "Isto é a Listagem PIX" / "Documento não reconhecido" | O app detectou que a foto não é o Resumo de Bolão (ex.: fotografou a Listagem PIX por engano). Fotografe o relatório certo, com a seção "COM TARIFA DE SERVIÇO" |
 
 ---
 
