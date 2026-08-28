@@ -294,7 +294,40 @@ continuar mostrando v36. Os dois números estavam certos: são instalações dif
 | Instalação | Onde | Quem usa |
 |---|---|---|
 | **GitHub Pages** | `https://marcelo888888.github.io/bolaocalc` — este repositório | celular via HTTPS |
-| **Cópia no SistLCA** | `C:\dev\Sist_Lca\bolaocalc\` — servida pelo PC em `http://<ip>:8000/bolaocalc/` | QR da aba Scan do LCA, rede local |
+| **Cópia no SistLCA — local A** | `C:\dev\Sist_Lca\bolaocalc\`, servida pelo PC do local A em `http://<ip-do-A>:8000/bolaocalc/` | QR da aba Scan, rede local do A |
+| **Cópia no SistLCA — loja (local B)** | `/opt/sist-lca/bolaocalc/` no **servidor `servidor-loja`** (ASUS Debian, Tailscale `100.91.143.80`) | tela do balcão e celular da loja |
+
+### ⚠️ A loja NÃO se atualiza pelo pendrive — quem serve lá é a ASUS
+
+Custou o dia 2026-08-28 para entender. **O PC do balcão (`PATEOPC3`) tem uma instalação
+Windows em `C:\dev\Sist_Lca`, mas ninguém a consome: a porta 8000 dele está fechada.**
+Atualizar as mídias de instalação (`_pendriveB/`, `_LCA_INSTALL_LOCAL_B\`,
+`LCA_INSTALL_copia_pendrive\`) **não muda a tela da loja**. O mesmo engano custou uma
+tarde em 12/08/2026, e está registrado no `CLAUDE.md` do SistLCA.
+
+**A prova de qual máquina está servindo é o selo `versão · servidor`** no topo do LCA:
+`servidor-loja` = ASUS (a loja) · `Alien` = local A.
+
+Para levar uma versão nova do BolãoCalc até a loja, depois do push neste repositório:
+
+```bash
+ssh marcelo@100.91.143.80
+cd /opt/sist-lca && sudo git pull
+```
+
+- **Sem `systemctl restart`.** O ritual padrão do SistLCA reinicia o serviço, mas isso é
+  para o `.py`. O `bolaocalc/` é arquivo estático, lido do disco a cada requisição — o
+  pull basta, e reiniciar em horário de expediente derruba o balcão à toa.
+- ⚠️ Na ASUS **`git pull` não é `reset --hard`**: arquivo rastreado reescrito em runtime
+  aborta o pull inteiro. Ver o `CLAUDE.md` do SistLCA.
+- **Conferir com fato medido**, de qualquer máquina na Tailscale:
+
+  ```bash
+  curl -s http://100.91.143.80:8000/bolaocalc/service-worker.js | grep -o "bolaocalc-v[0-9]*"
+  ```
+
+- Só depois disso o **Ctrl+F5** na tela do balcão e o **⚙️ → Forçar atualização** no
+  celular da loja fazem sentido — antes, o servidor ainda está mandando a versão velha.
 
 A cópia do SistLCA é **vendorizada, não é submódulo**: são os mesmos arquivos copiados
 à mão. `js/scan.js` do SistLCA lê o `service-worker.js` dessa cópia e mostra "Versão no
@@ -305,9 +338,10 @@ no SistLCA **por caminho explícito** (naquele repo `git add -A` é proibido; ve
 `CLAUDE.md`/`AGENTS.md` de lá, que exige registrar a tarefa no `docs/ai/STATE.json` e
 escrever no `docs/ai/HANDOFF.md`).
 
-Ainda existem cópias de instalação do **local B** — `_pendriveB/codigo/bolaocalc/` (não
+Ainda existem cópias de instalação do **PATEOPC3** — `_pendriveB/codigo/bolaocalc/` (não
 versionada), `C:\dev\_LCA_INSTALL_LOCAL_B\` e `C:\dev\LCA_INSTALL_copia_pendrive\`.
-Em 2026-08-28 as três estavam na v36.
+Mantenha-as em dia para uma reinstalação futura, mas **não é por elas que a loja se
+atualiza** — ver o aviso acima.
 
 **Consequência prática:** enquanto as instalações estiverem em versões diferentes, elas
 precisam concordar no nome da chave no `localStorage` — por isso a v40 grava em
