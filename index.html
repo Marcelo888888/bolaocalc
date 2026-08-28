@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v37</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v38</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -569,7 +569,7 @@
         // ===== MOTOR DE LEITURA (visao computacional, chamado direto do browser) =====
         // Economia primeiro: o lite resolve a maioria dos comprovantes; se a validacao
         // (soma dos jogos x total do comprovante) nao fechar, a cascata sobe sozinha.
-        const OCR_ENGINES = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash'];
+        const OCR_ENGINES = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash'];
         let engineIdx = 0; // índice do modelo atual
 
         const CHAVE_STORAGE = 'app_access_key';

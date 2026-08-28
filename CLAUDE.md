@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v37)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v38)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -56,7 +56,7 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 
 ### 2. OCR por visão computacional
 - Modelo primário: `gemini-3.1-flash-lite` (o mais barato)
-- Fallbacks: `gemini-3.5-flash`, `gemini-3.6-flash`
+- Fallbacks: `gemini-3.6-flash`, `gemini-3.5-flash` — nessa ordem, do mais barato ao mais caro
 - 2 tentativas por modelo (prompt detalhado + simplificado)
 - Validação interna: compara soma dos jogos vs totais declarados (≤5% = consistente)
 - Chave API armazenada em `localStorage('app_access_key')` (migra sozinha da antiga `gemini_key`)
@@ -174,8 +174,11 @@ modelo barato faz a cascata subir sozinha para o próximo. O pior caso é uma
 chamada extra.
 
 1. `gemini-3.1-flash-lite` — primário, $0.25/$1.50 por milhão de tokens
-2. `gemini-3.5-flash` — fallback de qualidade, $1.50/$9.00
-3. `gemini-3.6-flash` — último recurso, $0.75/$3.75
+2. `gemini-3.6-flash` — $0.75/$3.75 (vira $1.50/$7.50 em 01/01/2027)
+3. `gemini-3.5-flash` — último recurso, $1.50/$9.00
+
+A ordem continua válida depois do reajuste de 2027: o 3.6 fica com o mesmo
+preço de entrada do 3.5 e ainda mais barato na saída.
 
 **Atenção — armadilhas do Gemini 3:**
 - O *thinking* vem **ligado por padrão** e seus tokens são descontados do
