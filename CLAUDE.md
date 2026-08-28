@@ -350,6 +350,33 @@ precisam concordar no nome da chave no `localStorage` — por isso a v40 grava e
 ---
 
 ## Deploy
+
+### Checklist — publicar é 4 lugares, não 1
+
+Em 2026-08-28 as versões v37, v38 e v39 foram publicadas e **nenhuma chegou à loja**,
+porque só o passo 2 tinha sido feito. Marcar os quatro:
+
+- [ ] **1. Versão** — subir juntos `CACHE_NAME` (`service-worker.js`) e o badge
+      `id="appVersion"` (`index.html`). Já saíram de sincronia (badge v31 com SW v36).
+- [ ] **2. GitHub Pages** — `git push` neste repo. Confere com
+      `curl -s https://marcelo888888.github.io/bolaocalc/service-worker.js | head -1`
+      (leva ~1 min).
+- [ ] **3. SistLCA** — copiar `index.html` e `service-worker.js` para
+      `C:\dev\Sist_Lca\bolaocalc\` e commitar lá **por caminho explícito**
+      (`git add -A` é proibido naquele repo; exige `docs/ai/STATE.json` +
+      `docs/ai/HANDOFF.md`). Atualizar junto as mídias do PATEOPC3.
+- [ ] **4. Loja** — `ssh marcelo@100.91.143.80` → `cd /opt/sist-lca && sudo git pull`.
+      Confere com
+      `curl -s http://100.91.143.80:8000/bolaocalc/service-worker.js | grep -o "bolaocalc-v[0-9]*"`.
+
+Depois, em cada aparelho: **⚙️ → Forçar atualização** e conferir o badge. Na tela do
+balcão, **Ctrl+F5**. Sem isso o service worker antigo segue servindo a versão do cache,
+mesmo com o servidor já atualizado.
+
+> **2026-08-28 — cadeia validada de ponta a ponta.** A v41 foi confirmada nas seis
+> instalações (Pages, local A, ASUS da loja e as três mídias), incluindo a tela do balcão
+> e o celular da loja. Os caminhos acima são os que funcionaram de fato, não teoria.
+
 - GitHub Pages: branch `main`, raiz `/`
 - **`git pull` antes de começar** — o app é usado em duas máquinas (A e B) e as duas
   commitam neste repo. Já houve push rejeitado por trabalhar sobre cópia atrasada.
