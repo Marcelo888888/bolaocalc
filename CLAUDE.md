@@ -62,6 +62,13 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 - Chave API armazenada em `localStorage('app_access_key')` (migra sozinha da antiga `gemini_key`)
 - `maxOutputTokens: 16384` + `thinkingLevel: 'minimal'` — necessário para comprovantes com 15+ jogos
 
+**2026-08-28 (v40) — a chave é gravada em DOIS nomes de propósito.** A v39 renomeou a
+chave de `gemini_key` para `app_access_key` **e apagava a antiga**. Como o app tem duas
+instalações (seção própria abaixo) e a do PC estava na v36 — que lê o nome antigo —, quem
+configurasse numa precisava digitar de novo na outra. `gravarAccessKey()` grava nos dois.
+**Remover a escrita duplicada quando todas as cópias estiverem >= v40**, inclusive as
+mídias de instalação do local B.
+
 **2026-08-28 (v37→v39) — troca de geração dos motores, marca branca e rede de segurança.**
 O app tinha parado de ser confiável porque a cascata apontava para modelos mortos:
 o primário estava em fim de vida (o provedor já o derrubou uma vez antes da data
@@ -262,6 +269,35 @@ preço de entrada do 3.5 e ainda mais barato na saída.
 | HTTP 404 | Motor aposentado pelo provedor | Tenta o próximo da lista; se **todos** derem 404, cai na descoberta automática (ver seção Motores de leitura) |
 | JSON truncado / resposta vazia | thinking consumindo o `maxOutputTokens` | `thinkingLevel: 'minimal'` + limite 16384 |
 | Documento errado (ex.: Listagem PIX) | Foto não é o Resumo de Bolão | `mostrarDocErrado(tipo)` avisa e volta pra câmera, sem contar tentativa |
+
+---
+
+## ⚠️ O app tem DUAS instalações — atualizar as duas
+
+Descoberto em 2026-08-28, depois de a máquina A abrir a v39 e a aba Scan do LCA
+continuar mostrando v36. Os dois números estavam certos: são instalações diferentes.
+
+| Instalação | Onde | Quem usa |
+|---|---|---|
+| **GitHub Pages** | `https://marcelo888888.github.io/bolaocalc` — este repositório | celular via HTTPS |
+| **Cópia no SistLCA** | `C:\dev\Sist_Lca\bolaocalc\` — servida pelo PC em `http://<ip>:8000/bolaocalc/` | QR da aba Scan do LCA, rede local |
+
+A cópia do SistLCA é **vendorizada, não é submódulo**: são os mesmos arquivos copiados
+à mão. `js/scan.js` do SistLCA lê o `service-worker.js` dessa cópia e mostra "Versão no
+PC: vN" — é o número dela, não o do GitHub Pages.
+
+**Ao publicar aqui, copiar `index.html` e `service-worker.js` para lá também** e commitar
+no SistLCA **por caminho explícito** (naquele repo `git add -A` é proibido; ver o
+`CLAUDE.md`/`AGENTS.md` de lá, que exige registrar a tarefa no `docs/ai/STATE.json` e
+escrever no `docs/ai/HANDOFF.md`).
+
+Ainda existem cópias de instalação do **local B** — `_pendriveB/codigo/bolaocalc/` (não
+versionada), `C:\dev\_LCA_INSTALL_LOCAL_B\` e `C:\dev\LCA_INSTALL_copia_pendrive\`.
+Em 2026-08-28 as três estavam na v36.
+
+**Consequência prática:** enquanto as instalações estiverem em versões diferentes, elas
+precisam concordar no nome da chave no `localStorage` — por isso a v40 grava em
+`app_access_key` **e** `gemini_key`. Ver a nota da v40 na seção de OCR.
 
 ---
 
