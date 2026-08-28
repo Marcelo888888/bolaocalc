@@ -1,7 +1,7 @@
 # CLAUDE.md — BolãoCalc CAIXA
 
 ## Visão Geral
-PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O usuário tira foto do comprovante da lotérica, o app faz OCR via Gemini Vision para extrair os jogos e calcula automaticamente o valor de cada cota.
+PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O usuário tira foto do comprovante da lotérica, o app faz OCR por um modelo de visão para extrair os jogos e calcula automaticamente o valor de cada cota.
 
 **URL produção:** https://marcelo888888.github.io/bolaocalc
 
@@ -23,7 +23,7 @@ manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
 apple-touch-icon.png # Ícone iOS
-qrcode.png           # QR do link p/ gerar a chave Gemini (aistudio.google.com/apikey) — usado DENTRO do
+qrcode.png           # QR do link p/ gerar a chave de acesso (aistudio.google.com/apikey) — usado DENTRO do
                       # app, no modal ⚙️ Configurações. NÃO abre o app — corrigido em 2026-07-20 depois
                       # do README/topo apontar pra ele por engano (ver qrcode_app.png abaixo).
 qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolaocalc) — usado no topo
@@ -50,7 +50,7 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
   antes de qualquer trabalho de 2026-07-20). `retakePhoto()` só reabre a câmera; não existe mais botão
   "✏️ Digitar Manualmente" no HTML nem no README. Se essa doc dizia o contrário até 2026-07-20, estava
   desatualizada — corrigido.
-- Gate de documento errado (não documentado até 2026-07-20): `mostrarDocErrado(tipo)` — se o Gemini
+- Gate de documento errado (não documentado até 2026-07-20): `mostrarDocErrado(tipo)` — se o motor
   identificar que a foto não é o Resumo de Bolão (ex.: Listagem PIX), mostra aviso específico e volta pra
   câmera sem montar tabela nem contar como tentativa falha.
 
@@ -61,6 +61,33 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 - Validação interna: compara soma dos jogos vs totais declarados (≤5% = consistente)
 - Chave API armazenada em `localStorage('app_access_key')` (migra sozinha da antiga `gemini_key`)
 - `maxOutputTokens: 16384` + `thinkingLevel: 'minimal'` — necessário para comprovantes com 15+ jogos
+
+**2026-08-28 (v37→v39) — troca de geração dos motores, marca branca e rede de segurança.**
+O app tinha parado de ser confiável porque a cascata apontava para modelos mortos:
+o primário estava em fim de vida (o provedor já o derrubou uma vez antes da data
+anunciada) e o terceiro não existia mais — ou seja, toda foto gastava requests em
+404 antes de chegar num motor vivo. O que mudou:
+
+- Cascata trocada pelos modelos atuais, **ordenada por preço** (ver "Ordem da lista fixa").
+  Numa primeira versão (v37) a ordem saiu errada — `3.5-flash` na frente do `3.6-flash`,
+  sendo o 3.5 o dobro do preço. Corrigido na v38.
+- `thinkingLevel: 'minimal'` + `maxOutputTokens: 16384`. O modo de raciocínio da
+  geração 3 vem **ligado por padrão** e divide o orçamento de saída com o JSON —
+  era a causa real do "JSON truncado" que esta doc registrava como falta de limite.
+  O código tinha `thinkingBudget: 0`, que resolve o mesmo, mas é o parâmetro legado
+  e a doc oficial diz para não combinar com o novo.
+- `temperature: 0` removido: virou desaconselhado na geração 3 (risco de loop).
+- Removidos `ocrWithOcrSpace()` e `ocrWithTesseract()` — **nenhum dos dois tinha
+  chamador** — junto com o `<script>` do tesseract.js (CDN externa que o service
+  worker nem cacheava, então offline falhava de qualquer jeito) e uma **chave de
+  API do OCR.space que estava hardcoded** no fonte de um repositório público.
+- Marca branca (seção própria abaixo) e descoberta automática de motores (idem).
+- Como o app é usado em **duas máquinas (A e B)**, cada uma dessas mudanças só
+  chega depois do ⚙️ → "Forçar atualização" nas duas — ver Deploy.
+
+> Armadilha de processo desta sessão: o trabalho começou sobre uma cópia local
+> atrasada (v22) enquanto o repositório já estava na v36, e o `git push` foi
+> rejeitado no fim. **Antes de mexer, `git pull`** — as duas máquinas commitam aqui.
 
 ### 3. Validação
 - Compara `soma(vBolao + vTarifa)` vs `totalComprovante` (bolão+tarifa do comprovante)
@@ -169,7 +196,8 @@ Estrutura JSON esperada:
 ### Correção Automática de Tarifa
 Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa o calculado e marca como estimada.
 
-### Modelos Gemini (ordem de tentativa)
+## Motores de leitura
+
 ### Descoberta automática (v39)
 
 Se **todos** os motores da lista fixa responderem 404 — o provedor aposentou os
@@ -231,7 +259,7 @@ preço de entrada do 3.5 e ainda mais barato na saída.
 |------|-------|-----------|
 | HTTP 429 | Limite de requisições atingido — **a chave é da conta paga do Marcelo**, não é quota de free tier; provavelmente rate limit (req/min), não falta de crédito | Mensagem ao usuário: "❌ Limite de leitura atingido" (código não sugere gerar nova chave — isso não resolve rate limit numa chave paga do mesmo projeto) |
 | HTTP 400 expired | Chave expirada | Mensagem: configurar nova chave no ⚙️ |
-| HTTP 404 | Modelo descontinuado | Tenta próximo modelo da lista |
+| HTTP 404 | Motor aposentado pelo provedor | Tenta o próximo da lista; se **todos** derem 404, cai na descoberta automática (ver seção Motores de leitura) |
 | JSON truncado / resposta vazia | thinking consumindo o `maxOutputTokens` | `thinkingLevel: 'minimal'` + limite 16384 |
 | Documento errado (ex.: Listagem PIX) | Foto não é o Resumo de Bolão | `mostrarDocErrado(tipo)` avisa e volta pra câmera, sem contar tentativa |
 
@@ -239,8 +267,18 @@ preço de entrada do 3.5 e ainda mais barato na saída.
 
 ## Deploy
 - GitHub Pages: branch `main`, raiz `/`
-- Service worker atualizado a cada deploy (incrementar versão `bolaocalc-vN`)
-- Para forçar atualização no browser: F12 → Application → Service Workers → Unregister → Ctrl+Shift+R
+- **`git pull` antes de começar** — o app é usado em duas máquinas (A e B) e as duas
+  commitam neste repo. Já houve push rejeitado por trabalhar sobre cópia atrasada.
+- A cada deploy, incrementar **os dois** juntos: `CACHE_NAME` em `service-worker.js`
+  e o badge `id="appVersion"` no topo do `index.html`. Eles saíram de sincronia uma
+  vez (badge v31 com SW v36) e o badge é justamente como se confere, no celular, se
+  a máquina já pegou a versão nova.
+- Publicação no Pages leva ~1 min depois do push. Conferir com:
+  `curl -s https://marcelo888888.github.io/bolaocalc/service-worker.js | head -1`
+- **Em cada máquina/celular:** ⚙️ → "Forçar atualização" (`forcarAtualizacao()`, que
+  desregistra o service worker e limpa os caches) → conferir o badge no topo. Sem
+  isso o service worker antigo continua servindo a versão velha do cache.
+- Alternativa no desktop: F12 → Application → Service Workers → Unregister → Ctrl+Shift+R
 
 ---
 
