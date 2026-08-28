@@ -11,7 +11,6 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-    <script src='https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js'></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         body { 
@@ -271,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v31</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v37</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -282,7 +281,7 @@
                 <h3 style="color:#00d4ff;margin-bottom:15px;">⚙️ Configurações</h3>
 
                 <div style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:12px;padding:12px;margin-bottom:15px;">
-                    <p style="color:#ccd6f6;font-size:0.85em;margin-bottom:8px;font-weight:bold;">Como obter a chave Gemini:</p>
+                    <p style="color:#ccd6f6;font-size:0.85em;margin-bottom:8px;font-weight:bold;">Como obter a chave de acesso:</p>
                     <p style="color:#8892b0;font-size:0.8em;line-height:1.6;">
                         1. Acesse <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#00d4ff;">aistudio.google.com/apikey</a><br>
                         2. Faça login com sua conta Google<br>
@@ -295,7 +294,7 @@
                     </div>
                 </div>
 
-                <input type="password" id="geminiKeyInput" placeholder="Cole sua chave Gemini aqui (AIza...)"
+                <input type="password" id="accessKeyInput" placeholder="Cole sua chave de acesso aqui"
                     style="width:100%;padding:12px;border:1px solid rgba(0,212,255,0.3);border-radius:10px;background:rgba(0,0,0,0.3);color:#ccd6f6;font-size:0.9em;margin-bottom:15px;">
 
                 <div style="margin-top:15px;border-top:1px solid rgba(0,212,255,0.15);padding-top:15px;">
@@ -466,7 +465,7 @@
         // ===== IMAGE PRE-PROCESSING AVANÇADO =====
 
         // Remove anotações de caneta azul/vermelha da imagem
-        // Retorna um novo File limpo para enviar ao Gemini
+        // Retorna um novo File limpo para enviar ao motor de leitura
         async function removePenMarks(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -567,17 +566,29 @@
             });
         }
 
-        // ===== GEMINI VISION (motor principal — tem CORS) =====
-        // Tenta modelos do mais recente ao mais estável
-        const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
-        let geminiModelIdx = 0; // índice do modelo atual
+        // ===== MOTOR DE LEITURA (visao computacional, chamado direto do browser) =====
+        // Economia primeiro: o lite resolve a maioria dos comprovantes; se a validacao
+        // (soma dos jogos x total do comprovante) nao fechar, a cascata sobe sozinha.
+        const OCR_ENGINES = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash'];
+        let engineIdx = 0; // índice do modelo atual
 
-        function getGeminiKey() {
-            return localStorage.getItem('gemini_key') || '';
+        const CHAVE_STORAGE = 'app_access_key';
+
+        function getAccessKey() {
+            const atual = localStorage.getItem(CHAVE_STORAGE);
+            if (atual) return atual;
+            // Migracao da chave salva em versoes anteriores (<= v36)
+            const antiga = localStorage.getItem('gemini_key');
+            if (antiga) {
+                localStorage.setItem(CHAVE_STORAGE, antiga);
+                localStorage.removeItem('gemini_key');
+                return antiga;
+            }
+            return '';
         }
 
         function abrirConfig() {
-            document.getElementById('geminiKeyInput').value = getGeminiKey();
+            document.getElementById('accessKeyInput').value = getAccessKey();
             
             const isLocal = (window.location.hostname !== 'marcelo888888.github.io' && window.location.hostname !== '');
             const ipInput = document.getElementById('lcaServerInput');
@@ -613,8 +624,8 @@
         }
 
         function salvarConfig() {
-            const key = document.getElementById('geminiKeyInput').value.trim();
-            if (key) { localStorage.setItem('gemini_key', key); }
+            const key = document.getElementById('accessKeyInput').value.trim();
+            if (key) { localStorage.setItem(CHAVE_STORAGE, key); }
             
             // Só salvar IP se o campo estiver habilitado (no GitHub Pages, não no acesso local)
             const _ipInput = document.getElementById('lcaServerInput');
@@ -653,7 +664,7 @@
         }
 
         // Prompt principal
-        const GEMINI_PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
+        const PROMPT_PRIMARY = `Você é um leitor de comprovantes da Lotérica CAIXA. Retorne SOMENTE JSON válido, sem texto antes ou depois, sem markdown.
 
 PRIMEIRO, classifique o documento no campo "tipoDocumento":
 - "RESUMO_BOLAO": tem o título "RESUMO DE BOLÃO" E a seção "BOLAO CAIXA - COM TARIFA DE SERVICO" (colunas MOD-CONC / C.T/C.V / V.BOLAO / %TAR / V.TARIFA). Este é o documento certo.
@@ -683,7 +694,7 @@ Formato de saída:
 {"tipoDocumento":"RESUMO_BOLAO","operadorNome":"ADRIANA DE ARAUJO MO","operadorCodigo":"L282530","terminal":"022045","jogos":[{"modalidade":"MEGA","concurso":"2995","qt":3,"vBolao":30.00,"pctTar":35,"vTarifa":10.50}],"totalBolao":594.00,"totalTarifa":207.85}`;
 
         // Prompt simplificado para retry
-        const GEMINI_PROMPT_RETRY = `Leia o comprovante da CAIXA e retorne JSON puro.
+        const PROMPT_RETRY = `Leia o comprovante da CAIXA e retorne JSON puro.
 
 Classifique em "tipoDocumento": "RESUMO_BOLAO" se tiver "RESUMO DE BOLÃO" + "BOLAO CAIXA - COM TARIFA DE SERVICO"; "PIX" se tiver "LISTAGEM PIX" ou "TOTAL DO RECEBIMENTO"; senão "OUTRO". Se não for "RESUMO_BOLAO", retorne "jogos":[].
 
@@ -697,7 +708,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 - Cada linha = 1 jogo. Não agrupe.
 - Se V.TARIFA ilegível: vBolao * pctTar / 100`;
 
-        async function _callGemini(b64, mediaType, prompt, key, model) {
+        async function _callEngine(b64, mediaType, prompt, key, model) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
             const resp = await fetch(url, {
                 method: 'POST',
@@ -708,9 +719,12 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                         { text: prompt }
                     ]}],
                     generationConfig: {
-                        temperature: 0,
-                        maxOutputTokens: 8192,
-                        thinkingConfig: { thinkingBudget: 0 }
+                        // O modo de raciocinio vem ligado e divide o orcamento com a saida:
+                        // sem limita-lo, comprovante grande volta truncado. thinkingLevel e o
+                        // parametro atual (thinkingBudget e legado e nao deve ser combinado).
+                        // temperature fica no default: 0 hoje e desaconselhado (risco de loop).
+                        thinkingConfig: { thinkingLevel: 'minimal' },
+                        maxOutputTokens: 16384
                     }
                 })
             });
@@ -729,7 +743,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             }
         }
 
-        function _validateGeminiResult(result) {
+        function _validateResult(result) {
             // Validação básica do resultado
             if (!result || !Array.isArray(result.jogos)) return { valid: false, reason: 'sem jogos' };
             if (result.jogos.length === 0) return { valid: false, reason: 'array vazio' };
@@ -754,9 +768,9 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             };
         }
 
-        async function ocrWithGemini(file) {
-            const key = getGeminiKey();
-            if (!key) throw new Error('Chave Gemini não configurada');
+        async function ocrWithEngine(file) {
+            const key = getAccessKey();
+            if (!key) throw new Error('Chave de acesso não configurada');
             const b64 = await fileToBase64(file);
             const mediaType = file.type || 'image/jpeg';
 
@@ -765,16 +779,16 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             let lastError = '';
 
             // Tenta cada modelo disponível
-            for (let mi = 0; mi < GEMINI_MODELS.length; mi++) {
-                const model = GEMINI_MODELS[mi];
+            for (let mi = 0; mi < OCR_ENGINES.length; mi++) {
+                const model = OCR_ENGINES[mi];
 
                 // 1ª tentativa: prompt detalhado
                 try {
                     setOcrStatus('🔍 Lendo comprovante...');
-                    const result = await _callGemini(b64, mediaType, GEMINI_PROMPT_PRIMARY, key, model);
+                    const result = await _callEngine(b64, mediaType, PROMPT_PRIMARY, key, model);
                     // Documento não é Resumo de Bolão (ex.: PIX) — devolve para o chamador tratar, sem reprocessar
                     if (result && result.tipoDocumento && result.tipoDocumento !== 'RESUMO_BOLAO') return result;
-                    const check = _validateGeminiResult(result);
+                    const check = _validateResult(result);
                     if (check.valid && check.consistent) {
                         return result;
                     }
@@ -793,9 +807,9 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                 // 2ª tentativa com mesmo modelo: prompt simplificado
                 try {
                     setOcrStatus('🔄 Tentando de novo...');
-                    const result2 = await _callGemini(b64, mediaType, GEMINI_PROMPT_RETRY, key, model);
+                    const result2 = await _callEngine(b64, mediaType, PROMPT_RETRY, key, model);
                     if (result2 && result2.tipoDocumento && result2.tipoDocumento !== 'RESUMO_BOLAO') return result2;
-                    const check2 = _validateGeminiResult(result2);
+                    const check2 = _validateResult(result2);
                     if (check2.valid && check2.consistent) {
                         return result2;
                     }
@@ -818,31 +832,6 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             throw new Error(`Nenhum modelo funcionou. Último erro: ${lastError}`);
         }
 
-
-        // ===== OCR.SPACE FALLBACK =====
-        async function ocrWithOcrSpace(file) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('language', 'por');
-            formData.append('isOverlayRequired', 'false');
-            formData.append('detectOrientation', 'true');
-            formData.append('scale', 'true');
-            formData.append('OCREngine', '2');
-            const resp = await fetch('https://api.ocr.space/parse/image', {
-                method: 'POST',
-                headers: { 'apikey': 'K82269935' },
-                body: formData
-            });
-            const json = await resp.json();
-            if (json.IsErroredOnProcessing) throw new Error(json.ErrorMessage);
-            return json.ParsedResults?.[0]?.ParsedText || '';
-        }
-
-        // ===== TESSERACT FALLBACK =====
-        async function ocrWithTesseract(processedDataUrl) {
-            const result = await Tesseract.recognize(processedDataUrl, 'por', { tessedit_pageseg_mode: '6' });
-            return result.data.text;
-        }
 
         // ===== FILE INPUT =====
         const fileInput = document.getElementById('fileInput');
@@ -886,7 +875,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         // era pra transmitir, então abre a câmera sozinho (sem precisar tocar de novo).
         // Alguns navegadores bloqueiam input.click() fora de um gesto do usuário — por
         // isso também deixa o botão em destaque (pulsando) como reforço visual.
-        // Recebe a chave Gemini pelo HASH da URL (ver localUrlComChave) quando chega numa
+        // Recebe a chave de acesso pelo HASH da URL (ver localUrlComChave) quando chega numa
         // origem nova (IP local) que ainda não tem a chave salva no seu próprio localStorage.
         // Só grava se não houver chave local já configurada (não sobrescreve por engano).
         // Roda ANTES do autoFotoAoAbrirLocal abaixo pra garantir que a chave já esteja salva
@@ -894,8 +883,8 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
         (function sincronizarChaveDoHash() {
             const m = (window.location.hash || '').match(/gk=([^&]+)/);
             if (!m) return;
-            if (!getGeminiKey()) {
-                try { localStorage.setItem('gemini_key', decodeURIComponent(m[1])); } catch (e) {}
+            if (!getAccessKey()) {
+                try { localStorage.setItem(CHAVE_STORAGE, decodeURIComponent(m[1])); } catch (e) {}
             }
             history.replaceState({}, '', window.location.pathname + window.location.search);
         })();
@@ -917,7 +906,16 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             }, 300);
         })();
 
-        function showErroGemini(msg) {
+        // O corpo de erro da API cita o fornecedor e o ID do modelo — remove antes de exibir.
+        function sanitizarErro(msg) {
+            return String(msg)
+                .replace(/models\/[\w.-]+/gi, 'motor')
+                .replace(/gemini[\w.-]*/gi, 'motor')
+                .replace(/generativelanguage\.googleapis\.com/gi, 'servidor')
+                .replace(/google\s*ai\s*studio/gi, 'painel de chaves');
+        }
+
+        function showErroLeitura(msg) {
             document.getElementById('cameraSection').style.display = 'block';
             document.getElementById('validationDetails').innerHTML = `
                 <div style="background:#1a0a0a;border:1px solid #ff6b6b;border-radius:10px;padding:15px;margin:10px 0;color:#ff6b6b;text-align:center;font-size:0.9em;">
@@ -964,10 +962,10 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             setOcrStatus('🔍 Lendo comprovante...');
 
             try {
-                // 1º: Gemini Vision (tem CORS)
-                if (getGeminiKey()) {
+                // 1º: motor de leitura por imagem
+                if (getAccessKey()) {
                     try {
-                        const resultado = await ocrWithGemini(file);
+                        const resultado = await ocrWithEngine(file);
                         // Gate: documento não é Resumo de Bolão (ex.: PIX) — avisa e não monta tabela
                         if (resultado && resultado.tipoDocumento && resultado.tipoDocumento !== 'RESUMO_BOLAO') {
                             mostrarDocErrado(resultado.tipoDocumento);
@@ -1011,10 +1009,10 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                         document.getElementById('ocrLoading').classList.remove('show');
                         validateData(jogos, totalComprovante);
                         return;
-                    } catch (errGemini) {
-                        console.warn('Gemini falhou:', errGemini);
+                    } catch (errLeitura) {
+                        console.warn('Leitura falhou:', errLeitura);
                         document.getElementById('ocrLoading').classList.remove('show');
-                        const msg = errGemini.message || String(errGemini);
+                        const msg = sanitizarErro(errLeitura.message || String(errLeitura));
                         let dica = `❌ Não consegui ler o comprovante. Erro: ${msg}`;
                         if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
                             dica = `❌ Limite de leitura atingido. Erro: ${msg}`;
@@ -1023,12 +1021,12 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
                         } else if (msg.includes('404')) {
                             dica = `❌ Serviço de leitura indisponível (404). Erro: ${msg}`;
                         }
-                        showErroGemini(dica);
+                        showErroLeitura(dica);
                         return;
                     }
                 } else {
                     document.getElementById('ocrLoading').classList.remove('show');
-                    showErroGemini('❌ Leitura não configurada. Toque no ⚙️ para configurar.');
+                    showErroLeitura('❌ Leitura não configurada. Toque no ⚙️ para configurar.');
                     return;
                 }
 
@@ -1438,14 +1436,14 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 
 
         // ===== LCA TRANSMISSION =====
-        // Monta a URL da versão local (HTTP, mesma origem do PC) já levando a chave Gemini
+        // Monta a URL da versao local (HTTP, mesma origem do PC) ja levando a chave de acesso
         // junto no HASH da URL (nunca em query string — hash não é enviado pro servidor, não
         // fica em log nenhum). Sem isso, cada origem (github.io vs IP local) tem seu próprio
         // localStorage e o usuário precisaria configurar a chave de novo toda vez que a versão
         // local abrisse pela primeira vez. `caminho` deve começar com "/", ex.: "/bolaocalc/".
         function localUrlComChave(ipHost, caminho) {
             let url = 'http://' + ipHost + ':8000' + caminho;
-            const key = getGeminiKey();
+            const key = getAccessKey();
             if (key) url += '#gk=' + encodeURIComponent(key);
             return url;
         }

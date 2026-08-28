@@ -7,15 +7,15 @@ Calculadora de cotas para bolões da Lotérica CAIXA. Tire foto do comprovante e
 ![QR Code](qrcode_app.png)
 
 > Aponte a câmera do celular para o QR code acima para abrir o app.
-> Após abrir, configure sua chave Gemini no ⚙️ (veja instruções abaixo).
+> Após abrir, configure sua chave de acesso no ⚙️ (veja instruções abaixo).
 
 ---
 
 ## Como usar
 
-### 1. Primeira vez — configure a chave Gemini
+### 1. Primeira vez — configure a chave de acesso
 
-O app usa inteligência artificial (Google Gemini) para ler o comprovante. Usamos a chave da conta paga do Marcelo (não é a do tier gratuito) — leva 1 minuto configurar:
+O app usa inteligência artificial para ler o comprovante. Usamos a chave da conta paga do Marcelo (não é a do tier gratuito) — leva 1 minuto configurar:
 
 1. Acesse [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e faça login com sua conta Google
 2. Clique em **"Create API key"** e copie a chave gerada (começa com `AIza...`)
@@ -34,7 +34,7 @@ A chave fica salva no navegador, mas **por endereço**, não por aparelho: `http
      **🔗 Abrir local** no canto superior), ao tocar em **Tirar Foto** aparece uma telinha com dois botões:
      **🧮 Só Calc Manual** (calcula aqui mesmo) ou **📡 Transmitir PC** (troca pra versão local e já abre
      a câmera por lá sozinho — não perde a foto nem precisa repetir nada).
-3. Aguarde alguns segundos enquanto o Gemini lê o comprovante
+3. Aguarde alguns segundos enquanto o app lê o comprovante
 4. Confira os dados na tela de detalhes
 5. Toque em **📊 Ver Resumo** para ver as cotas
 
@@ -83,7 +83,7 @@ A troca pra versão local (quando necessária) já acontece **antes** da foto �
 - **Boa iluminação** — evite sombras sobre o comprovante
 - **Foto reta** — não inclinada, de cima para baixo
 - **Comprovante inteiro** — inclua o cabeçalho e os totais finais
-- **Se tiver anotações de caneta** — o Gemini ignora automaticamente, mas quanto menos melhor
+- **Se tiver anotações de caneta** — a leitura ignora automaticamente, mas quanto menos melhor
 - **Foto não funcionou?** — tente mais 2 vezes (o app permite 3 tentativas); depois disso o contador reinicia sozinho pra você tirar outra foto (não tem mais entrada manual — foi removida)
 
 ---
@@ -130,6 +130,6 @@ Após instalado, o app abre em tela cheia e funciona offline (exceto o OCR, que 
 ## Tecnologia
 
 - App 100% no navegador, sem servidor próprio
-- OCR por [Google Gemini Vision](https://aistudio.google.com) (modelo `gemini-3.5-flash`)
+- OCR por modelo de visão computacional, chamado direto do browser
 - PWA com cache offline via Service Worker
 - Hospedado no GitHub Pages

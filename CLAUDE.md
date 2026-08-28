@@ -9,7 +9,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 
 ## Stack
 - **Frontend:** HTML5 + Vanilla JS + CSS3 (tudo em `index.html`, single-file app)
-- **OCR:** Gemini Vision (único motor ativo — OCR.space e Tesseract são legados desativados)
+- **OCR:** modelo de visão (único motor — o código morto de OCR.space e Tesseract foi removido na v37)
 - **PWA:** Service Worker + manifest.json (funciona offline após primeira visita)
 - **Sem backend:** 100% client-side, roda no browser
 
@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v36)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v37)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -54,13 +54,13 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
   identificar que a foto não é o Resumo de Bolão (ex.: Listagem PIX), mostra aviso específico e volta pra
   câmera sem montar tabela nem contar como tentativa falha.
 
-### 2. OCR com Gemini Vision
-- Modelo primário: `gemini-3.5-flash`
-- Fallbacks: `gemini-2.5-flash`, `gemini-3.1-flash-lite`
+### 2. OCR por visão computacional
+- Modelo primário: `gemini-3.1-flash-lite` (o mais barato)
+- Fallbacks: `gemini-3.5-flash`, `gemini-3.6-flash`
 - 2 tentativas por modelo (prompt detalhado + simplificado)
 - Validação interna: compara soma dos jogos vs totais declarados (≤5% = consistente)
-- Chave API armazenada em `localStorage('gemini_key')`
-- `maxOutputTokens: 8192` — necessário para comprovantes com 15+ jogos
+- Chave API armazenada em `localStorage('app_access_key')` (migra sozinha da antiga `gemini_key`)
+- `maxOutputTokens: 16384` + `thinkingLevel: 'minimal'` — necessário para comprovantes com 15+ jogos
 
 ### 3. Validação
 - Compara `soma(vBolao + vTarifa)` vs `totalComprovante` (bolão+tarifa do comprovante)
@@ -119,10 +119,27 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 
 ---
 
+## ⚠️ Marca branca — o fornecedor de OCR não aparece na interface
+
+O app vai ser distribuído e o dono não quer expor qual tecnologia de IA usa.
+Regras ao mexer no código:
+
+- **Nenhum texto visível ao usuário** pode citar o fornecedor ou o ID do modelo —
+  isso inclui `setOcrStatus`, mensagens de erro, o modal do ⚙️ e os comentários do
+  fonte (o `index.html` é servido inteiro, comentário também é visível).
+- Erros crus da API passam por **`sanitizarErro()`** antes de ir para a tela: troca
+  `models/<id>`, o nome do fornecedor e o host por termos neutros.
+- Identificadores internos são neutros: `OCR_ENGINES`, `_callEngine`, `ocrWithEngine`,
+  `getAccessKey`, `showErroLeitura`, `accessKeyInput`.
+- **Limite conhecido e aceito:** os IDs em `OCR_ENGINES` e o host da API vão na URL
+  da requisição — quem abrir o DevTools descobre. Esconder de verdade exigiria um
+  backend intermediando as chamadas. Este `CLAUDE.md` também é público (o repo é
+  público por causa do GitHub Pages) — decisão consciente de 2026-08-28.
+
 ## Configurações (localStorage)
 | Chave | Valor | Descrição |
 |-------|-------|-----------|
-| `gemini_key` | String | API key do Google AI Studio para Gemini Vision. **Isolado por origem** (github.io ≠ IP local) — ver v4 na seção 6 sobre como a chave atravessa a troca de origem nos redirects do próprio app. |
+| `app_access_key` | String | API key do provedor de visão (migrada de `gemini_key`, usada até a v36). **Isolado por origem** (github.io ≠ IP local) — ver v4 na seção 6 sobre como a chave atravessa a troca de origem nos redirects do próprio app. |
 | `lca_server` | String | IP/host do PC (LCA) salvo no ⚙️ — usado por `getLcaUrl()` fora do GitHub Pages, e como base do link "local" no GitHub Pages. Faltava nesta tabela até 2026-07-20 (corrigido). |
 | `lca_operador` | Number (id) | Operador selecionado no ⚙️ — vai no payload de `POST /scan/boloes`. Faltava nesta tabela até 2026-07-20 (corrigido). |
 
@@ -130,7 +147,7 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 
 ## Padrões e Regras
 
-### Prompt do Gemini
+### Prompt do motor de leitura
 Dois prompts por tentativa:
 - **Primary**: descreve layout do comprovante CAIXA (MOD-CONC, C.T/C.V, seções COM/SEM TARIFA)
 - **Retry**: versão simplificada com as mesmas regras
@@ -151,12 +168,27 @@ Estrutura JSON esperada:
 Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa o calculado e marca como estimada.
 
 ### Modelos Gemini (ordem de tentativa)
-1. `gemini-3.5-flash` — primário, melhor qualidade
-2. `gemini-2.5-flash` — fallback estável/maduro
-3. `gemini-3.1-flash-lite` — fallback econômico/rápido
+A ordem é **econômica**, não por qualidade — `_validateResult` só aceita o resultado
+se a soma dos jogos fechar com os totais do comprovante (≤5%), então um erro do
+modelo barato faz a cascata subir sozinha para o próximo. O pior caso é uma
+chamada extra.
 
-**Atenção:** `gemini-2.0-flash` e `gemini-1.5-flash` foram descontinuados/removidos da API.
-`responseMimeType: "application/json"` causa HTTP 400 com gemini-2.5-flash — não usar.
+1. `gemini-3.1-flash-lite` — primário, $0.25/$1.50 por milhão de tokens
+2. `gemini-3.5-flash` — fallback de qualidade, $1.50/$9.00
+3. `gemini-3.6-flash` — último recurso, $0.75/$3.75
+
+**Atenção — armadilhas do Gemini 3:**
+- O *thinking* vem **ligado por padrão** e seus tokens são descontados do
+  `maxOutputTokens`. Sem limitá-lo o JSON volta vazio ou truncado em comprovante
+  grande. Usar `thinkingConfig: { thinkingLevel: 'minimal' }` — `thinkingBudget`
+  é o parâmetro legado e não deve ser combinado com o novo.
+- `temperature: 0` passou a ser **desaconselhado** (risco de loop). Deixar no default.
+- Usar IDs **explícitos**, nunca o alias `gemini-flash-latest`: o alias troca de
+  modelo sem aviso.
+- `gemini-2.5-flash`, `gemini-2.0-flash*` e `gemini-1.5-flash` estão descontinuados
+  ou em fim de vida — não voltar para eles.
+- `responseMimeType: "application/json"` causava HTTP 400 no 2.5-flash; não foi
+  reavaliado no 3.x. O parsing por regex em `_callEngine` é o que está em uso.
 
 ---
 
@@ -166,7 +198,7 @@ Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa
 | HTTP 429 | Limite de requisições atingido — **a chave é da conta paga do Marcelo**, não é quota de free tier; provavelmente rate limit (req/min), não falta de crédito | Mensagem ao usuário: "❌ Limite de leitura atingido" (código não sugere gerar nova chave — isso não resolve rate limit numa chave paga do mesmo projeto) |
 | HTTP 400 expired | Chave expirada | Mensagem: configurar nova chave no ⚙️ |
 | HTTP 404 | Modelo descontinuado | Tenta próximo modelo da lista |
-| JSON truncado | maxOutputTokens insuficiente | Aumentar limite (hoje: 8192) |
+| JSON truncado / resposta vazia | thinking consumindo o `maxOutputTokens` | `thinkingLevel: 'minimal'` + limite 16384 |
 | Documento errado (ex.: Listagem PIX) | Foto não é o Resumo de Bolão | `mostrarDocErrado(tipo)` avisa e volta pra câmera, sem contar tentativa |
 
 ---
