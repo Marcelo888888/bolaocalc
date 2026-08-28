@@ -62,6 +62,20 @@ qrcode_app.png        # QR do link do app (https://marcelo888888.github.io/bolao
 - Chave API armazenada em `localStorage('app_access_key')` (migra sozinha da antiga `gemini_key`)
 - `maxOutputTokens: 16384` + `thinkingLevel: 'minimal'` — necessário para comprovantes com 15+ jogos
 
+**2026-08-28 (v41) — a chave é identificada, nunca exibida.** O ⚙️ despejava a chave
+inteira dentro do campo de senha e o diálogo do "🔗 Abrir local" mostrava a URL com
+`#gk=<chave completa>` — visível na tela e em qualquer captura. Agora:
+
+- o campo do ⚙️ abre **vazio** (preencher = trocar; em branco = manter) e acima dele
+  aparece `🔑 Chave em uso: ••••ONMg · salva em 28/08/2026`. Só os **4 últimos
+  caracteres**, que é o que basta para saber se o aparelho está com a chave nova ou com
+  a que já esgotou — o fluxo do dono é apagar a chave esgotada e gerar outra;
+- o diálogo do "Abrir local" mostra o endereço **sem** o `#gk=`; a navegação continua
+  levando a chave.
+- **Limite:** a chave ainda passa pelo hash e aparece na barra de endereço por um
+  instante até `sincronizarChaveDoHash()` limpar com `history.replaceState`. Eliminar
+  isso exigiria outro mecanismo de transporte.
+
 **2026-08-28 (v40) — a chave é gravada em DOIS nomes de propósito.** A v39 renomeou a
 chave de `gemini_key` para `app_access_key` **e apagava a antiga**. Como o app tem duas
 instalações (seção própria abaixo) e a do PC estava na v36 — que lê o nome antigo —, quem
