@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v39</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v40</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -583,15 +583,25 @@
         let engineIdx = 0; // índice do modelo atual
 
         const CHAVE_STORAGE = 'app_access_key';
+        // Nome antigo (<= v36). O app tem DUAS instalacoes: esta (GitHub Pages) e a
+        // copia servida pelo PC em /bolaocalc/, dentro do SistLCA. Enquanto a copia do
+        // PC estiver numa versao antiga, ela le a chave por este nome — entao gravamos
+        // nos dois, senao o usuario precisa digitar a chave de novo em cada uma.
+        // Remover as duas linhas de escrita duplicada quando TODAS as copias
+        // (PC local A, PC local B e pendrives) estiverem >= v40.
+        const CHAVE_STORAGE_LEGADO = 'gemini_key';
+
+        function gravarAccessKey(key) {
+            localStorage.setItem(CHAVE_STORAGE, key);
+            localStorage.setItem(CHAVE_STORAGE_LEGADO, key);
+        }
 
         function getAccessKey() {
             const atual = localStorage.getItem(CHAVE_STORAGE);
             if (atual) return atual;
-            // Migracao da chave salva em versoes anteriores (<= v36)
-            const antiga = localStorage.getItem('gemini_key');
+            const antiga = localStorage.getItem(CHAVE_STORAGE_LEGADO);
             if (antiga) {
-                localStorage.setItem(CHAVE_STORAGE, antiga);
-                localStorage.removeItem('gemini_key');
+                gravarAccessKey(antiga);
                 return antiga;
             }
             return '';
@@ -635,7 +645,7 @@
 
         function salvarConfig() {
             const key = document.getElementById('accessKeyInput').value.trim();
-            if (key) { localStorage.setItem(CHAVE_STORAGE, key); }
+            if (key) { gravarAccessKey(key); }
             
             // Só salvar IP se o campo estiver habilitado (no GitHub Pages, não no acesso local)
             const _ipInput = document.getElementById('lcaServerInput');
@@ -988,7 +998,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             const m = (window.location.hash || '').match(/gk=([^&]+)/);
             if (!m) return;
             if (!getAccessKey()) {
-                try { localStorage.setItem(CHAVE_STORAGE, decodeURIComponent(m[1])); } catch (e) {}
+                try { gravarAccessKey(decodeURIComponent(m[1])); } catch (e) {}
             }
             history.replaceState({}, '', window.location.pathname + window.location.search);
         })();
