@@ -18,7 +18,7 @@ PWA (Progressive Web App) para calcular cotas de bolões de loteria da CAIXA. O 
 ## Estrutura de Arquivos
 ```
 index.html           # App inteiro (HTML + CSS + JS inline)
-service-worker.js    # Cache offline (versão atual: bolaocalc-v38)
+service-worker.js    # Cache offline (versão atual: bolaocalc-v39)
 manifest.json        # Metadados PWA
 icon-192.png         # Ícone PWA 192x192
 icon-512.png         # Ícone PWA 512x512
@@ -139,6 +139,8 @@ Regras ao mexer no código:
 ## Configurações (localStorage)
 | Chave | Valor | Descrição |
 |-------|-------|-----------|
+| `ocr_engines_cache` | JSON `{ts, valor:[...]}` | Motores descobertos no servidor, validade de 7 dias. Some sozinho; pode apagar sem medo. |
+| `ocr_engine_preferido` | JSON `{ts, valor:"..."}` | Último motor descoberto que funcionou; tentado antes da lista fixa. |
 | `app_access_key` | String | API key do provedor de visão (migrada de `gemini_key`, usada até a v36). **Isolado por origem** (github.io ≠ IP local) — ver v4 na seção 6 sobre como a chave atravessa a troca de origem nos redirects do próprio app. |
 | `lca_server` | String | IP/host do PC (LCA) salvo no ⚙️ — usado por `getLcaUrl()` fora do GitHub Pages, e como base do link "local" no GitHub Pages. Faltava nesta tabela até 2026-07-20 (corrigido). |
 | `lca_operador` | Number (id) | Operador selecionado no ⚙️ — vai no payload de `POST /scan/boloes`. Faltava nesta tabela até 2026-07-20 (corrigido). |
@@ -168,6 +170,35 @@ Estrutura JSON esperada:
 Se `vTarifa` lido difere em >R$0,02 do calculado (`vBolao × pctTar / 100`), usa o calculado e marca como estimada.
 
 ### Modelos Gemini (ordem de tentativa)
+### Descoberta automática (v39)
+
+Se **todos** os motores da lista fixa responderem 404 — o provedor aposentou os
+IDs escritos no código — o app chama `GET {API_BASE}/models` e passa a usar o que
+existe hoje, sem precisar de deploy nas máquinas. Detalhes que importam:
+
+- **Só dispara depois de 404 em todos os fixos.** No caminho normal não há request
+  extra nenhum.
+- Filtra por `generateContent` + nome com `flash`, descartando o que não serve para
+  OCR (`image`, `tts`, `live`, `transcribe`, `embedding`, `audio`, `video`, `gemma`,
+  `omni`) via `MOTOR_INCOMPATIVEL`.
+- Ordena por custo em `_ordenarPorCusto`: `lite` primeiro, depois versão mais nova,
+  `preview`/`exp` por último. É heurística por nome — quando os preços mudarem de
+  forma relevante, revisar aqui.
+- Tenta no máximo `MAX_MOTORES_DESCOBERTOS` (3).
+- **Cache:** a lista fica em `localStorage.ocr_engines_cache` e o motor que
+  funcionou em `ocr_engine_preferido`, ambos com validade de 7 dias
+  (`CACHE_TTL_MS`). O preferido é tentado **antes** da lista fixa, para não
+  desperdiçar 404 a cada foto enquanto o deploy não acontece. Ele é descartado
+  assim que voltar a dar 404.
+- Se a própria listagem falhar (403, rede), o erro original da leitura é o que
+  aparece na tela — a descoberta nunca piora a mensagem.
+
+**Isso não substitui atualizar a lista fixa.** É rede de segurança: quando cair
+nesse caminho, o certo é olhar o console (`Motores descobertos: ...`) e promover o
+modelo bom para `OCR_ENGINES`, escolhendo pelo preço real e não pela heurística.
+
+### Ordem da lista fixa
+
 A ordem é **econômica**, não por qualidade — `_validateResult` só aceita o resultado
 se a soma dos jogos fechar com os totais do comprovante (≤5%), então um erro do
 modelo barato faz a cascata subir sozinha para o próximo. O pior caso é uma

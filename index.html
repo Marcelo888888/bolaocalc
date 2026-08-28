@@ -270,7 +270,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v38</span></h1>
+            <h1>🎰 BolãoCalc <span style="font-size:0.4em;color:#8892b0;vertical-align:middle;background:rgba(255,255,255,0.1);padding:3px 8px;border-radius:10px;" id="appVersion">v39</span></h1>
             <p>Leia o comprovante da Lotérica CAIXA</p>
             <button onclick="abrirConfig()" style="background:none;border:none;color:#8892b0;font-size:1.3em;cursor:pointer;position:absolute;right:20px;top:25px;" title="Configurações">⚙️</button>
         </div>
@@ -570,6 +570,16 @@
         // Economia primeiro: o lite resolve a maioria dos comprovantes; se a validacao
         // (soma dos jogos x total do comprovante) nao fechar, a cascata sobe sozinha.
         const OCR_ENGINES = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+        const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+        // Descoberta automatica: quando TODOS os motores da lista acima somem com 404
+        // (o provedor aposentou os IDs), o app pergunta ao servidor quais existem hoje
+        // em vez de exigir um deploy novo em cada maquina. A lista fica em cache e o
+        // motor que funcionou passa a ser tentado primeiro, para nao gastar 404s.
+        const CACHE_MOTORES = 'ocr_engines_cache';
+        const MOTOR_PREFERIDO = 'ocr_engine_preferido';
+        const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+        const MAX_MOTORES_DESCOBERTOS = 3;
         let engineIdx = 0; // índice do modelo atual
 
         const CHAVE_STORAGE = 'app_access_key';
@@ -709,7 +719,7 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
 - Se V.TARIFA ilegível: vBolao * pctTar / 100`;
 
         async function _callEngine(b64, mediaType, prompt, key, model) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            const url = `${API_BASE}/models/${model}:generateContent?key=${key}`;
             const resp = await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -768,68 +778,162 @@ Para RESUMO_BOLAO, leia SOMENTE a seção "COM TARIFA DE SERVIÇO". IGNORE tudo 
             };
         }
 
+        // Le um valor com validade do localStorage; null se vencido ou corrompido.
+        function _lerCache(chave) {
+            try {
+                const bruto = JSON.parse(localStorage.getItem(chave) || 'null');
+                if (!bruto || (Date.now() - bruto.ts) > CACHE_TTL_MS) return null;
+                return bruto.valor;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function _gravarCache(chave, valor) {
+            try {
+                localStorage.setItem(chave, JSON.stringify({ ts: Date.now(), valor }));
+            } catch (e) { /* storage cheio ou bloqueado: seguir sem cache */ }
+        }
+
+        // Ordena do mais barato para o mais caro: versao "lite" primeiro, depois a
+        // versao mais nova. Modelos preview ficam por ultimo.
+        function _ordenarPorCusto(a, b) {
+            const peso = (nome) => [
+                /preview|exp/i.test(nome) ? 1 : 0,
+                /lite/i.test(nome) ? 0 : 1,
+                -parseFloat((nome.match(/(\d+(?:\.\d+)?)/) || [])[1] || '0')
+            ];
+            const pa = peso(a), pb = peso(b);
+            for (let i = 0; i < pa.length; i++) {
+                if (pa[i] !== pb[i]) return pa[i] - pb[i];
+            }
+            return 0;
+        }
+
+        // Nao servem para ler comprovante: geracao de imagem, audio, video, embeddings.
+        const MOTOR_INCOMPATIVEL = /image|tts|live|transcribe|embedding|audio|video|gemma|omni/i;
+
+        async function descobrirMotores(key) {
+            const cache = _lerCache(CACHE_MOTORES);
+            if (cache && cache.length) return cache;
+
+            const resp = await fetch(`${API_BASE}/models?key=${key}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status} ao listar motores`);
+            const json = await resp.json();
+
+            const motores = (json.models || [])
+                .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+                .map(m => String(m.name || '').replace(/^models\//, ''))
+                .filter(nome => /flash/i.test(nome) && !MOTOR_INCOMPATIVEL.test(nome))
+                .sort(_ordenarPorCusto);
+
+            if (motores.length) _gravarCache(CACHE_MOTORES, motores);
+            return motores;
+        }
+
+        // Uma chamada ao motor com um prompt. Devolve {pronto, result} quando o
+        // resultado ja serve, {erro404} quando o motor sumiu, null para seguir tentando.
+        async function _tentativa(model, prompt, ctx) {
+            try {
+                const result = await _callEngine(ctx.b64, ctx.mediaType, prompt, ctx.key, model);
+                // Documento nao e Resumo de Bolao (ex.: PIX) - devolve para o chamador tratar
+                if (result && result.tipoDocumento && result.tipoDocumento !== 'RESUMO_BOLAO') {
+                    return { pronto: true, result };
+                }
+                const check = _validateResult(result);
+                if (check.valid && check.consistent) {
+                    ctx.motorQueFuncionou = model;
+                    return { pronto: true, result };
+                }
+                if (check.valid && check.pctDiff < ctx.bestCheck.pctDiff) {
+                    ctx.bestResult = result;
+                    ctx.bestCheck = check;
+                }
+                if (!check.valid) ctx.lastError = 'Validacao falhou: ' + check.reason;
+                return null;
+            } catch (err) {
+                ctx.lastError = err.message;
+                // Autenticacao, permissao ou quota: nao adianta tentar outro motor
+                if (/\b(400|401|403|429)\b/.test(err.message)) throw err;
+                if (err.message.includes('404')) {
+                    ctx.erro404 = true;
+                    return { erro404: true };
+                }
+                return null;
+            }
+        }
+
+        async function _rodarCascata(engines, ctx) {
+            for (const model of engines) {
+                setOcrStatus('\ud83d\udd0d Lendo comprovante...');
+                const r1 = await _tentativa(model, PROMPT_PRIMARY, ctx);
+                if (r1 && r1.pronto) return r1;
+                if (r1 && r1.erro404) continue; // motor aposentado: nem tenta o prompt alternativo
+
+                setOcrStatus('\ud83d\udd04 Tentando de novo...');
+                const r2 = await _tentativa(model, PROMPT_RETRY, ctx);
+                if (r2 && r2.pronto) return r2;
+            }
+            return null;
+        }
+
         async function ocrWithEngine(file) {
             const key = getAccessKey();
             if (!key) throw new Error('Chave de acesso não configurada');
-            const b64 = await fileToBase64(file);
-            const mediaType = file.type || 'image/jpeg';
+            const ctx = {
+                key,
+                b64: await fileToBase64(file),
+                mediaType: file.type || 'image/jpeg',
+                bestResult: null,
+                bestCheck: { valid: false, pctDiff: Infinity },
+                lastError: '',
+                erro404: false,
+                motorQueFuncionou: null
+            };
 
-            let bestResult = null;
-            let bestCheck = { valid: false, pctDiff: Infinity };
-            let lastError = '';
+            // Motor descoberto numa sessão anterior vem primeiro: evita gastar 404s
+            // repetindo a lista fixa que já sabemos estar aposentada.
+            const preferido = _lerCache(MOTOR_PREFERIDO);
+            const fixos = (preferido && !OCR_ENGINES.includes(preferido))
+                ? [preferido].concat(OCR_ENGINES)
+                : OCR_ENGINES.slice();
 
-            // Tenta cada modelo disponível
-            for (let mi = 0; mi < OCR_ENGINES.length; mi++) {
-                const model = OCR_ENGINES[mi];
+            const pronto = await _rodarCascata(fixos, ctx);
+            if (pronto) {
+                if (ctx.motorQueFuncionou) _gravarCache(MOTOR_PREFERIDO, ctx.motorQueFuncionou);
+                return pronto.result;
+            }
 
-                // 1ª tentativa: prompt detalhado
+            // Nenhum motor da lista respondeu e houve 404: os IDs escritos no código
+            // foram aposentados. Pergunta ao servidor quais existem hoje.
+            if (ctx.erro404 && !ctx.bestResult) {
+                localStorage.removeItem(MOTOR_PREFERIDO);
+                let descobertos = [];
                 try {
-                    setOcrStatus('🔍 Lendo comprovante...');
-                    const result = await _callEngine(b64, mediaType, PROMPT_PRIMARY, key, model);
-                    // Documento não é Resumo de Bolão (ex.: PIX) — devolve para o chamador tratar, sem reprocessar
-                    if (result && result.tipoDocumento && result.tipoDocumento !== 'RESUMO_BOLAO') return result;
-                    const check = _validateResult(result);
-                    if (check.valid && check.consistent) {
-                        return result;
-                    }
-                    if (check.valid && check.pctDiff < bestCheck.pctDiff) {
-                        bestResult = result;
-                        bestCheck = check;
-                    }
-                    if (!check.valid) lastError = `Validação falhou: ${check.reason}`;
-                } catch (err1) {
-                    lastError = err1.message;
-                    // Erros de autenticação, permissão ou quota devem ser lançados imediatamente
-                    if (err1.message.includes('400') || err1.message.includes('401') || err1.message.includes('403') || err1.message.includes('429')) throw err1;
-                    if (err1.message.includes('404')) continue;
+                    setOcrStatus('\ud83d\udd0e Procurando motor disponível...');
+                    descobertos = await descobrirMotores(key);
+                } catch (e) {
+                    console.warn('Descoberta de motores falhou:', e.message);
                 }
-
-                // 2ª tentativa com mesmo modelo: prompt simplificado
-                try {
-                    setOcrStatus('🔄 Tentando de novo...');
-                    const result2 = await _callEngine(b64, mediaType, PROMPT_RETRY, key, model);
-                    if (result2 && result2.tipoDocumento && result2.tipoDocumento !== 'RESUMO_BOLAO') return result2;
-                    const check2 = _validateResult(result2);
-                    if (check2.valid && check2.consistent) {
-                        return result2;
+                const novos = descobertos
+                    .filter(m => !fixos.includes(m))
+                    .slice(0, MAX_MOTORES_DESCOBERTOS);
+                if (novos.length) {
+                    console.log('Motores descobertos: ' + novos.join(', '));
+                    const pronto2 = await _rodarCascata(novos, ctx);
+                    if (pronto2) {
+                        if (ctx.motorQueFuncionou) _gravarCache(MOTOR_PREFERIDO, ctx.motorQueFuncionou);
+                        return pronto2.result;
                     }
-                    if (check2.valid && check2.pctDiff < bestCheck.pctDiff) {
-                        bestResult = result2;
-                        bestCheck = check2;
-                    }
-                    if (!check2.valid) lastError = `Validação (alt) falhou: ${check2.reason}`;
-                } catch (err2) {
-                    lastError = err2.message;
-                    if (err2.message.includes('400') || err2.message.includes('401') || err2.message.includes('403') || err2.message.includes('429')) throw err2;
                 }
             }
 
             // Retorna o melhor resultado encontrado
-            if (bestResult && bestCheck.valid) {
-                console.log(`📋 Usando melhor resultado disponível, diff=${bestCheck.pctDiff.toFixed(1)}%`);
-                return bestResult;
+            if (ctx.bestResult && ctx.bestCheck.valid) {
+                console.log(`\ud83d\udccb Usando melhor resultado disponível, diff=${ctx.bestCheck.pctDiff.toFixed(1)}%`);
+                return ctx.bestResult;
             }
-            throw new Error(`Nenhum modelo funcionou. Último erro: ${lastError}`);
+            throw new Error(`Nenhum motor funcionou. Último erro: ${ctx.lastError}`);
         }
 
 
