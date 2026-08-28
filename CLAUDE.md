@@ -161,6 +161,27 @@ anunciada) e o terceiro não existia mais — ou seja, toda foto gastava request
   da aba Scan do LCA, sem passar por nenhum desses botões) ainda exige configurar a chave uma vez nessa
   origem, manualmente.
 
+**2026-08-28 — "não transmite" quase sempre é o servidor desligado, não o app.**
+No local A a transmissão voltou a funcionar assim que o LCA subiu
+(`local_A\INICIAR.bat`); antes disso não havia nada escutando na porta 8000 e o
+POST não tinha para onde ir. Antes de investigar o app, medir:
+
+```bash
+netstat -ano | grep LISTENING | grep ":8000"
+curl -s -o /dev/null -w "%{http_code}\n" http://<ip>:8000/bolaocalc/
+```
+
+⚠️ **Armadilha ao diagnosticar:** `GET /scan/boloes` responde **401**, e isso NÃO
+significa que a transmissão exige login. No `main.py` do SistLCA a liberação é por
+método — só `POST /scan/boloes` é público ("celular transmite bolão, não logado, por
+design"). Testar com GET dá um 401 enganoso; o handler real (`scan_boloes.py`) aceita
+o POST exigindo apenas que a lista de jogos não esteja vazia — nem operador é obrigatório.
+
+**O IP do ⚙️ é ignorado quando a página vem do próprio PC.** Se o app foi aberto por
+`http://<ip>:8000/bolaocalc/`, `getLcaUrl()` usa a origem da própria página e o campo do
+⚙️ aparece desabilitado mostrando esse host — mesmo que você tenha digitado outro IP. Não
+é bug: se a página veio do PC, o PC é esse. O IP digitado só vale no GitHub Pages.
+
 > Removido em 2026-07-20: botão/função "Compartilhar no WhatsApp" (`compartilhar()`, baseada em
 > `navigator.share`/`navigator.clipboard` — quebrava justamente no cenário acima, contexto HTTP inseguro).
 > Considerado desnecessário; eliminado do HTML e do JS.
