@@ -382,8 +382,11 @@ porque só o passo 2 tinha sido feito. Marcar os quatro:
 - [ ] **2. GitHub Pages** — `git push` neste repo. Confere com
       `curl -s https://marcelo888888.github.io/bolaocalc/service-worker.js | head -1`
       (leva ~1 min).
-- [ ] **3. SistLCA** — copiar `index.html` e `service-worker.js` para
-      `C:\dev\Sist_Lca\bolaocalc\` e commitar lá **por caminho explícito**
+- [ ] **3. SistLCA** — copiar `index.html`, `service-worker.js` **e também `CLAUDE.md` e
+      `README.md`** para `C:\dev\Sist_Lca\bolaocalc\` e commitar lá **por caminho explícito**.
+      Os dois docs ficaram para trás até 2026-08-28 (200 linhas contra 427) e um agente lendo
+      pela cópia — inclusive na ASUS, que não alcança este repositório — respondia com
+      informação velha sobre o app
       (`git add -A` é proibido naquele repo; exige `docs/ai/STATE.json` +
       `docs/ai/HANDOFF.md`). Atualizar junto as mídias do PATEOPC3.
 - [ ] **4. Loja** — `ssh marcelo@100.91.143.80` → `cd /opt/sist-lca && sudo git pull`.
