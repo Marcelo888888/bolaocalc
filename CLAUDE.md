@@ -372,6 +372,32 @@ precisam concordar no nome da chave no `localStorage` — por isso a v40 grava e
 
 ## Deploy
 
+### `verificar_publicacao.py` — o checklist que roda sozinho
+
+Antes de confiar na memória (a minha ou a sua), rode na raiz do repo:
+
+```bash
+python verificar_publicacao.py
+```
+
+Ele confere as três coisas que já falharam em silêncio: **badge × `CACHE_NAME`**
+(saíram de sincronia uma vez), **cada cópia em disco** byte a byte contra a fonte, e
+**o que cada servidor está realmente servindo**. Sai com código 1 se algo divergir.
+`--local` pula a rede.
+
+Detalhes que importam:
+
+- **Cópia não encontrada é falha, não aviso.** Ou o caminho no script está errado, ou a
+  instalação sumiu — nos dois casos é errado dizer "tudo publicado".
+- **Servidor fora do ar vira "NÃO VERIFICADO"**, nunca OK. Não é versão errada, mas
+  também não é prova de nada.
+- A mídia de instalação é conferida só no runtime (`index.html`, `service-worker.js`);
+  a cópia do SistLCA inclui `CLAUDE.md` e `README.md`, porque um agente lendo por lá
+  responde com o que estiver escrito nela.
+- Os caminhos usam barra normal de propósito: barra invertida em string já corrompeu
+  essa lista uma vez (`\b` virou backspace) e o script pulou todas as cópias **dizendo
+  que estava tudo publicado**. Falso verde é pior que erro.
+
 ### Checklist — publicar é 4 lugares, não 1
 
 Em 2026-08-28 as versões v37, v38 e v39 foram publicadas e **nenhuma chegou à loja**,
