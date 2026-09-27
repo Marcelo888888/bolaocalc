@@ -359,10 +359,11 @@ no SistLCA **por caminho explícito** (naquele repo `git add -A` é proibido; ve
 `CLAUDE.md`/`AGENTS.md` de lá, que exige registrar a tarefa no `docs/ai/STATE.json` e
 escrever no `docs/ai/HANDOFF.md`).
 
-Ainda existem cópias de instalação do **PATEOPC3** — `_pendriveB/codigo/bolaocalc/` (não
-versionada), `C:\dev\_LCA_INSTALL_LOCAL_B\` e `C:\dev\LCA_INSTALL_copia_pendrive\`.
-Mantenha-as em dia para uma reinstalação futura, mas **não é por elas que a loja se
-atualiza** — ver o aviso acima.
+Ainda existe a cópia de instalação do **PATEOPC3** em `_pendriveB/codigo/bolaocalc/` (não
+versionada). Mantenha-a em dia para uma reinstalação futura, mas **não é por ela que a loja
+se atualiza** — ver o aviso acima. As outras duas (`C:\dev\_LCA_INSTALL_LOCAL_B\` e
+`C:\dev\LCA_INSTALL_copia_pendrive\`) foram arquivadas em 26/09/2026 em
+`C:\dev\_arquivo\2026-09\` e saíram do `verificar_publicacao.py`.
 
 **Consequência prática:** enquanto as instalações estiverem em versões diferentes, elas
 precisam concordar no nome da chave no `localStorage` — por isso a v40 grava em
