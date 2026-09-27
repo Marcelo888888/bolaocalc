@@ -448,10 +448,16 @@ mesmo com o servidor já atualizado.
 > Corrigido em 2026-07-20 — a versão anterior citava uma pasta (`Antigravity_Testes/`) que não existe
 > mais no ambiente atual; ficou desatualizada numa reorganização de pastas não registrada aqui.
 
-- Vive em disco dentro do repo do LCA (`C:\dev\Sist_Lca\bolaocalc\`), mas é um **git independente**
-  (remoto próprio `github.com/Marcelo888888/bolaocalc.git`, branch `main`) — commits e push aqui NÃO
-  passam pelo git do `Sist_Lca` (remoto `github.com/Marcelo888888/Sist_Lca.git`). É preciso `git push`
-  dentro da própria pasta `bolaocalc/` pra publicar no GitHub Pages; editar o arquivo local não basta
-  (isso já causou confusão em 2026-07-20 — ver `memory` do Cowork, "iPhone versão antiga").
+- **Este repositório é a FONTE** (decisão do Marcelo, 27/09/2026): `C:\dev\bolaocalc`, remoto
+  `github.com/Marcelo888888/bolaocalc.git`, branch `main` (publica no GitHub Pages). Edita-se **só aqui**.
+- `C:\dev\Sist_Lca\bolaocalc\` é a **cópia publicada** que a ASUS serve na loja: pasta comum, versionada
+  pelo git do SistLCA, **sem `.git` próprio** (até 31/08/2026 era um repo aninhado e divergiu v41 × v36).
+  Levar a mudança para lá = copiar os 4 arquivos e commitar no SistLCA; `verificar_publicacao.py` confere.
 - **INDEPENDENTE** do projeto PDV Gráfica — não encontrado em `C:\dev` no ambiente atual; se existir,
   é em outro lugar/máquina, sem relação de código com este app.
+
+## Uso de modelos Z.AI (GLM)
+
+Vale a regra do SistLCA: `C:/dev/Sist_Lca/CLAUDE.md` → seção "Uso de modelos Z.AI (GLM)" (plano
+`zai-coding-plan/`, nunca `zai/`; cota de 2.000 créditos/5 h e 10.000/semana; OpenRouter/CodeRouter só
+com o "ok" do Marcelo). Não duplicar o texto aqui — duas cópias divergem.
