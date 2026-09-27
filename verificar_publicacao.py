@@ -34,8 +34,8 @@ COM_DOC = RUNTIME + ["CLAUDE.md", "README.md"]
 COPIAS = [
     ("C:/dev/Sist_Lca/bolaocalc", COM_DOC),
     ("C:/dev/Sist_Lca/_pendriveB/codigo/bolaocalc", RUNTIME),
-    ("C:/dev/_LCA_INSTALL_LOCAL_B/codigo/bolaocalc", RUNTIME),
-    ("C:/dev/LCA_INSTALL_copia_pendrive/codigo/bolaocalc", RUNTIME),
+    # _LCA_INSTALL_LOCAL_B e LCA_INSTALL_copia_pendrive foram arquivadas em
+    # 2026-09-27 (C:/dev/_arquivo/2026-09/): ninguem instalava mais por elas.
 ]
 
 SERVIDORES = [
